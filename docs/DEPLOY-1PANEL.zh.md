@@ -24,9 +24,40 @@
 
 ---
 
-## 1. 把代码放到服务器
+## 0b. 部署时实测踩过的坑（本仓库已修，勿回退）
 
-任选其一。
+以下三点在首次真机部署（腾讯云轻量 + 1Panel，2026-09-15）中实际发生，代码与脚本已修正：
+
+| 现象 | 根因 | 修法 |
+| --- | --- | --- |
+| `docker compose` 警告 `The "xxxx" variable is not set`，随后登录报 `口令不正确` | `.env` 里 `ADMIN_PASSWORD_HASH` 是 scrypt 格式、**含 `$`**；compose 会对未加引号的值做变量插值，把 `$16384`、`$8` 当成变量展开成空字符串 | 该值**必须用单引号包裹**：`ADMIN_PASSWORD_HASH='scrypt$16384$8$1$…'`。**双引号也不行**（compose 仍会插值，实测哈希被截断成 39 字符导致登录全失败） |
+| 服务被绑到 `0.0.0.0:8787`（公网明文可达） | compose 的 `ports` 是**合并**语义：覆盖文件只写新映射时，基础文件里的 `8787:8787` 依然生效 | 用 `ports: !override` 显式替换整个列表（Compose v2.24+，本机实测 5.1.1 支持）；老版本改为只 `docker compose -f docker-compose.1panel.yml up -d` |
+| 启动报 `failed to bind host port 127.0.0.1:8787: address already in use`，可 `ss`/`/proc/net/tcp` 都看不到占用者 | 首次启动失败残留的 Docker 网络绑定状态 | `docker compose down --remove-orphans` + `docker rm -f` 后重建；换端口亦可立即验证（实测换 18787 即成功，从而确认不是端口真被占用） |
+
+两条与自动化部署相关的提示：
+
+- `deploy-1panel.sh` 支持**非交互传口令**：`ADMIN_PW='xxx' bash scripts/deploy-1panel.sh`（或第 3 个位置参数），便于脚本化调用。
+- 脚本会自动探测 `docker` 是否需要 `sudo`（如 ubuntu 用户未加入 docker 组），避免非交互环境下卡在密码提示。
+- 服务器上生成的共享引导令牌同时写入数据库与 `.env`；**重建容器后令牌依然有效**（已实测 `--force-recreate` 后仍可鉴权），因为服务启动时会回读数据库。
+
+---
+
+## 0c. 一次成功的部署实况（可对照自查）
+
+```
+主机      VM-0-5-ubuntu · Ubuntu 24.04.4 LTS · 4 核 / 3.7G 内存 / 根分区余 43G
+Docker    29.3.0 · Compose v5.1.1
+1Panel    /opt/1panel（80/443 由 openresty 监听）
+安装目录  /opt/dsh-cost-cloud（git clone，提交 5699f2a）
+端口      127.0.0.1:8787（仅回环；公网 8787 实测 HTTP 000 不可达）
+数据卷    dsh_data → /var/lib/docker/volumes/dsh_data/_data（sqlite + backups/）
+资源占用  19 MiB 内存 · CPU 0%
+自检      /healthz ok · /api/v1/health ok · 管理员登录 ok · 上报 accepted=1 · 概览与矩阵正确
+```
+
+---
+
+## 1. 把代码放到服务器（git 方式，推荐）
 
 **仓库地址**：`https://github.com/Angelyeye/dsh-cost-cloud`（公开仓库，服务器克隆不需要凭据）
 

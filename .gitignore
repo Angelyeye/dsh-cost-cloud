@@ -8,3 +8,4 @@ data/
 tmp-*
 .DS_Store
 Thumbs.db
+scripts/gen-ssh-key.mjs
