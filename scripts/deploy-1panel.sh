@@ -27,10 +27,19 @@ die() { printf '\n\033[1;31m[错误] %s\033[0m\n' "$*" >&2; exit 1; }
 
 say "1/6 检查依赖"
 command -v docker >/dev/null 2>&1 || die "未找到 docker。1Panel 用户请先在面板「应用商店」安装 Docker（或按官方文档装）。"
-if docker compose version >/dev/null 2>&1; then
-  DC="docker compose"
+# docker 可能需要 sudo（ubuntu 用户未加入 docker 组时）——这里自动探测，避免后续卡在密码提示
+if docker ps >/dev/null 2>&1; then
+  SUDO=""
+elif sudo -n docker ps >/dev/null 2>&1; then
+  SUDO="sudo"
+  echo "提示：当前用户不在 docker 组，将使用 sudo 调用 docker"
+else
+  die "既不能免密用 docker，也不能免密 sudo docker。请执行：sudo usermod -aG docker \$USER && newgrp docker"
+fi
+if $SUDO docker compose version >/dev/null 2>&1; then
+  DC="$SUDO docker compose"
 elif command -v docker-compose >/dev/null 2>&1; then
-  DC="docker-compose"
+  DC="$SUDO docker-compose"
 else
   die "未找到 docker compose。请先安装 compose 插件。"
 fi
@@ -48,13 +57,17 @@ say "3/6 生成 .env"
 if [ -f .env ] && grep -q '^SESSION_SECRET=.\+' .env; then
   echo ".env 已存在且含 SESSION_SECRET，跳过生成（如需重置请自行删除）"
 else
-  printf '设置管理员口令（输入时不回显）：'
-  read -rs ADMIN_PW; echo
+  # 口令来源：环境变量 ADMIN_PW（非交互/自动化）> 位置参数 3 > 交互输入
+  ADMIN_PW="${ADMIN_PW:-${3:-}}"
+  if [ -z "$ADMIN_PW" ]; then
+    printf '设置管理员口令（输入时不回显）：'
+    read -rs ADMIN_PW; echo
+  fi
   [ -n "$ADMIN_PW" ] || die "口令不能为空"
   [ ${#ADMIN_PW} -ge 8 ] || die "口令至少 8 位"
-  SECRET="$(docker run --rm node:24-alpine node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+  SECRET="$($SUDO docker run --rm node:24-alpine node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
   # 用容器里的 node 生成 scrypt 哈希（与 src/auth.js 的 verifyPassword 格式一致）
-  HASH="$(docker run --rm -e PW="$ADMIN_PW" node:24-alpine node -e "
+  HASH="$($SUDO docker run --rm -e PW="$ADMIN_PW" node:24-alpine node -e "
     const { scryptSync, randomBytes } = require('node:crypto');
     const salt = randomBytes(16);
     const dk = scryptSync(process.env.PW, salt, 32, { N: 16384, r: 8, p: 1 });
