@@ -13,24 +13,34 @@
 ## 快速开始（Docker，推荐）
 
 ```bash
-git clone <你的仓库地址> dsh-cost-cloud && cd dsh-cost-cloud
+# 1) 取代码（公开仓库）
+sudo mkdir -p /opt && cd /opt
+sudo git clone https://github.com/Angelyeye/dsh-cost-cloud.git
+sudo chown -R $USER:$USER /opt/dsh-cost-cloud
+cd /opt/dsh-cost-cloud
 
-# 1) 生成两个密钥/哈希
+# 2) 生成两个密钥/哈希
 cp .env.example .env
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"   # → SESSION_SECRET
 node scripts/hash-password.js "你的管理员口令"                                   # → ADMIN_PASSWORD_HASH
 # 把两者填进 .env
 
-# 2) 起服务
+# 3) 起服务
 docker compose up -d
 
-# 3) 打开看板
+# 4) 打开看板
 #    http://<服务器IP>:8787
 ```
 
 首次登录后到 **设置** 页点「生成共享引导令牌」，把它填进 DSH 插件的「云端同步」配置卡即可开始上报。
 
-生产环境请在前面放一层 TLS（见 `Caddyfile.example`），并把 compose 的端口改成 `127.0.0.1:8787:8787` 只对反代暴露。
+生产环境请在前面放一层 TLS，并把 compose 的端口改成 `127.0.0.1:8787:8787` 只对反代暴露
+（`docker-compose.1panel.yml` 就是为此准备的覆盖文件）。
+
+**升级**：`git pull && docker compose -f docker-compose.yml -f docker-compose.1panel.yml up -d --build`
+（`.env` 已 gitignore，`git pull` 不会覆盖你的密钥；数据库迁移启动时自动执行，迁移前自动备份）
+
+**部署到腾讯云轻量 + 1Panel**：见 [`docs/DEPLOY-1PANEL.zh.md`](docs/DEPLOY-1PANEL.zh.md)（含反代、证书、防火墙、备份、排障）。
 
 ## 不用 Docker（单进程直跑）
 

@@ -28,46 +28,63 @@
 
 任选其一。
 
-**方式 A：git（推荐，之后升级只需 pull）**
+**仓库地址**：`https://github.com/Angelyeye/dsh-cost-cloud`（公开仓库，服务器克隆不需要凭据）
+
 ```bash
+sudo mkdir -p /opt
 cd /opt
-sudo git clone <你的 dsh-cost-cloud 仓库地址> dsh-cost-cloud
+sudo git clone https://github.com/Angelyeye/dsh-cost-cloud.git
 sudo chown -R $USER:$USER /opt/dsh-cost-cloud
+cd /opt/dsh-cost-cloud
+ls -1          # 应看到 src web docs scripts Dockerfile docker-compose*.yml
 ```
 
-**方式 B：从你的电脑上传**（本机 Windows，在 PowerShell 里执行）
-```powershell
-# 只传运行必需的文件，避免把 node_modules / 测试数据带上去
-scp -r `
-  "C:\Users\59531\Documents\DeepSeek工作区\dsh-cost-cloud\src" `
-  "C:\Users\59531\Documents\DeepSeek工作区\dsh-cost-cloud\web" `
-  "C:\Users\59531\Documents\DeepSeek工作区\dsh-cost-cloud\docs" `
-  "C:\Users\59531\Documents\DeepSeek工作区\dsh-cost-cloud\scripts" `
-  "C:\Users\59531\Documents\DeepSeek工作区\dsh-cost-cloud\package.json" `
-  "C:\Users\59531\Documents\DeepSeek工作区\dsh-cost-cloud\Dockerfile" `
-  "C:\Users\59531\Documents\DeepSeek工作区\dsh-cost-cloud\docker-compose.yml" `
-  "C:\Users\59531\Documents\DeepSeek工作区\dsh-cost-cloud\docker-compose.1panel.yml" `
-  "C:\Users\59531\Documents\DeepSeek工作区\dsh-cost-cloud\.dockerignore" `
-  "C:\Users\59531\Documents\DeepSeek工作区\dsh-cost-cloud\.env.example" `
-  "C:\Users\59531\Documents\DeepSeek工作区\dsh-cost-cloud\README.md" `
-  ubuntu@81.71.157.148:/opt/dsh-cost-cloud/
+`.env` **不在仓库里**（已 gitignore），密钥只存在于服务器上 —— 所以 `git pull` 升级永远不会覆盖你的密钥。
+
+### 以后升级（一条命令）
+
+```bash
+cd /opt/dsh-cost-cloud
+git pull
+docker compose -f docker-compose.yml -f docker-compose.1panel.yml up -d --build
 ```
-（`scp` 会提示输入服务器密码。首次连接会问 yes/no，输 `yes`。）
+
+数据库迁移在容器启动时自动执行；迁移前会把旧库复制到卷内 `data/backups/`（保留最近 7 份）。
+想锁定版本可以 `git checkout <tag>` 再重建。
+
+### 备选：不用 git 的压缩包方式
+
+```bash
+cd /opt
+curl -L https://github.com/Angelyeye/dsh-cost-cloud/archive/refs/heads/main.tar.gz | tar xz
+mv dsh-cost-cloud-main dsh-cost-cloud && cd dsh-cost-cloud
+```
+（缺点：没有版本历史，升级要重新下载；不推荐长期使用。）
+
+### 若你日后改成私有仓库
+
+```bash
+# 服务器上生成专用只读密钥
+ssh-keygen -t ed25519 -f ~/.ssh/id_git -N '' -C dshc-server
+cat ~/.ssh/id_git.pub
+# 把上面这行加到 GitHub 仓库 → Settings → Deploy keys（勾选只读，不要勾写权限）
+GIT_SSH_COMMAND="ssh -i ~/.ssh/id_git" git clone git@github.com:Angelyeye/dsh-cost-cloud.git
+```
 
 ---
 
 ## 2. 一键部署
 
-上传/克隆完成后，在服务器上执行：
+克隆完成后，在服务器上执行：
 
 ```bash
 cd /opt/dsh-cost-cloud
 sudo bash scripts/deploy-1panel.sh /opt/dsh-cost-cloud 8787
 ```
 
-脚本会：检查 docker → 复制文件到安装目录 → **生成 `.env`**（随机 `SESSION_SECRET` +
-用你输入的口令派生 `ADMIN_PASSWORD_HASH`，文件权限 600）→ 构建并启动 → 自检 `/healthz` → 打印后续步骤。
-脚本是幂等的，可重复运行；已有 `.env` 时不会覆盖。
+脚本会：检查 docker → 生成 `.env`（随机 `SESSION_SECRET` +
+用你输入的口令派生 `ADMIN_PASSWORD_HASH`，文件权限 600）→ 构建并启动（端口只绑回环）→ 自检 `/healthz` → 打印后续步骤。
+脚本是幂等的，可重复运行；已有 `.env` 时不会覆盖，所以配合 `git pull` 升级很安全。
 
 ---
 
