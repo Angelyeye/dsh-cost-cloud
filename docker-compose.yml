@@ -1,0 +1,33 @@
+# ============================================================
+# dsh-cost-cloud —— 单机部署（推荐）
+#
+#   1. cp .env.example .env        # 填 SESSION_SECRET 与 ADMIN_PASSWORD_HASH
+#   2. docker compose up -d
+#   3. 浏览器打开 http://<你的域名或IP>:8787 （生产建议用 Caddy 反代加 TLS）
+#
+# 数据持久化在命名卷 dsh_data（SQLite + WAL），升级镜像不会丢数据。
+# ============================================================
+services:
+  dsh-cost-cloud:
+    build: .
+    image: dsh-cost-cloud:latest
+    container_name: dsh-cost-cloud
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # 容器内固定监听所有网卡，外部访问由 HOST 端口映射 / 反向代理控制
+      HOST: 0.0.0.0
+      PORT: 8787
+      DATA_DIR: /data
+      # 部署在反向代理（Caddy/Nginx）之后时打开，用于正确识别客户端 IP
+      TRUST_PROXY: "1"
+    volumes:
+      - dsh_data:/data
+    ports:
+      # 仅绑定回环时请改成 "127.0.0.1:8787:8787"，由反代对外
+      - "8787:8787"
+
+volumes:
+  dsh_data:
+    name: dsh_data

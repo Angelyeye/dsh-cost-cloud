@@ -1,0 +1,24 @@
+# ============================================================
+# Caddy 反向代理示例（自动 HTTPS）
+#
+# 把 dsh-cost.example.com 换成你的域名，DNS 指向本机后：
+#   docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d
+# 或直接把本文件内容追加到系统 Caddy 的 Caddyfile。
+#
+# 同时把 compose 里的端口映射改成 "127.0.0.1:8787:8787"，
+# 让服务只被 Caddy 访问，不再直接暴露。
+# ============================================================
+dsh-cost.example.com {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8787 {
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+	# 上报接口限流兜底（可选；服务端自身也有令牌桶限流）
+	@api path /api/v1/*
+	header @api Cache-Control "no-store"
+	log {
+		output file /var/log/caddy/dsh-cost-cloud.log
+		format console
+	}
+}

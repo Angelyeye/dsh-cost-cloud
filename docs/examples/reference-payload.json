@@ -1,0 +1,64 @@
+# ============================================================
+# 参考载荷（docs/INGEST-API.md §3.3）
+# 可直接用于本地验证：
+#   curl -X POST http://127.0.0.1:8787/api/v1/ingest/records \
+#     -H "authorization: Bearer <token>" -H "content-type: application/json" \
+#     -d @docs/examples/reference-payload.json
+# ============================================================
+{
+  "syncVer": 1,
+  "source": "demo",
+  "agentInstance": "",
+  "agent": { "name": "Demo Agent", "version": "1.0.0", "pluginVersion": "0.1.0" },
+  "deviceId": "demo-machine-1",
+  "deviceName": "演示机器",
+  "resetEpoch": 0,
+  "maxClientSeq": 2,
+  "sentAt": 1789392645019,
+  "clock": { "tzOffset": -480 },
+  "batchUid": "demo-batch-0001",
+  "records": [
+    {
+      "seq": 1,
+      "ts": 1789392645019,
+      "provider": "deepseek-official",
+      "model": "deepseek-v4.1-flash",
+      "sessionId": "s-1",
+      "purpose": "proj-a",
+      "tokens": { "input": 3850, "output": 2880, "cacheRead": 43904, "cacheWrite": 0, "reasoning": 2612 },
+      "cost": 0.01624808,
+      "costBasis": "reported",
+      "estimated": false,
+      "period": "off-peak",
+      "subscription": false,
+      "meta": { "workspace": "proj-a" }
+    },
+    {
+      "seq": 2,
+      "ts": 1789392645020,
+      "provider": "deepseek-official",
+      "model": "deepseek-v4.1-flash",
+      "sessionId": "s-1",
+      "purpose": "proj-a",
+      "tokens": { "input": 1200, "output": 400, "cacheRead": 0, "cacheWrite": 0, "reasoning": 0 },
+      "cost": 0.0016,
+      "estimated": false,
+      "subscription": false
+    }
+  ],
+  "rollups": [
+    {
+      "dayKey": "2026-03-04",
+      "provider": "deepseek-official",
+      "model": "deepseek-v4.1-flash",
+      "subscription": false,
+      "calls": 12,
+      "tokens": { "input": 12000, "output": 8000, "cacheRead": 40000, "cacheWrite": 0, "reasoning": 0 },
+      "cost": 1.23,
+      "peak": 0.4,
+      "off": 0.8,
+      "flat": 0.03,
+      "absorbed": []
+    }
+  ]
+}

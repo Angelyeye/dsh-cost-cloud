@@ -1,0 +1,26 @@
+{
+  "name": "dsh-cost-cloud",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloud aggregation service for AI agent token usage & cost (dsh-cost-tracker and any agent that implements docs/INGEST-API.md). Zero runtime dependencies: node:http + node:sqlite + node:crypto.",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node --no-warnings src/server.js",
+    "serve": "node --no-warnings src/server.js",
+    "test": "node --no-warnings --test \"test/*.test.js\"",
+    "test:pricing": "node --no-warnings scripts/check-pricing-sync.js",
+    "hash-password": "node --no-warnings scripts/hash-password.js"
+  },
+  "keywords": [
+    "token-usage",
+    "cost-tracking",
+    "dsh",
+    "sqlite",
+    "self-hosted"
+  ],
+  "license": "MIT"
+}

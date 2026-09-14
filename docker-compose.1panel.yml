@@ -1,0 +1,27 @@
+# ============================================================
+# 1Panel 部署覆盖文件（推荐用法）
+#
+# 1Panel 的「网站」功能已经内置 OpenResty 反向代理 + Let's Encrypt 证书，
+# 因此这里把服务端口**只绑到回环地址**，由 1Panel 的网站反向代理对外，
+# 不再需要额外跑一层 Caddy。
+#
+# 用法：
+#   docker compose -f docker-compose.yml -f docker-compose.1panel.yml up -d
+# 或在 1Panel「容器 → 编排」里导入本文件（1Panel 会自动合并同目录的 compose 文件）
+#
+# 对外访问配置（1Panel 面板里做）：
+#   网站 → 创建网站 → 反向代理
+#     主域名：cost.example.com（换成你的域名，DNS 解析到本机）
+#     代理地址：http://127.0.0.1:8787
+#     开启 HTTPS（申请 Let's Encrypt 证书）
+#
+# 注意：
+#   · 只暴露 127.0.0.1 意味着「只有本机能访问」，公网必须经 1Panel 反代进来，
+#     这样 TLS、访问日志、限流都在 1Panel 这一层统一管理。
+#   · 反代之后 X-Forwarded-For 由 1Panel 注入，所以 TRUST_PROXY=1 是正确设置
+#     （服务端只在 TRUST_PROXY=1 时才采信该头，用于正确识别客户端 IP 与限流）。
+# ============================================================
+services:
+  dsh-cost-cloud:
+    ports:
+      - "127.0.0.1:8787:8787"
