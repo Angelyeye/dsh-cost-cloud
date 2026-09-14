@@ -111,7 +111,9 @@ export function el(tag, attrs, children) {
       if (k === 'class') node.className = v
       else if (k === 'html') node.innerHTML = v
       else if (k === 'text') node.textContent = v
-      else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v)
+      // 注意：DOM 事件名大小写敏感。onClick → 'click'，必须 toLowerCase，
+      // 否则 addEventListener('Click') 会静默注册失败（不报错、不触发）。
+      else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2).toLowerCase(), v)
       else if (k === 'style' && typeof v === 'object') Object.assign(node.style, v)
       else if (k === 'dataset' && typeof v === 'object') Object.assign(node.dataset, v)
       else node.setAttribute(k, String(v))

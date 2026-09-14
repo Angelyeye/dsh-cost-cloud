@@ -9,7 +9,7 @@ import { createServer as createHttpServer } from 'node:http'
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { randomBytes } from 'node:crypto'
+import { randomBytes, createHash } from 'node:crypto'
 
 import { openDatabase, getMeta, setMeta } from './db.js'
 import { createIngest, authenticate, parseEnvelope, validateEnvelopeShape, registerDevice, mintToken } from './ingest.js'
@@ -405,8 +405,8 @@ export function createServer(config, opts) {
   })
 
   // ---------------- 静态资源 ----------------
-  router.mount('/assets', ({ res, params }) => serveStatic(res, webDir, params.rest))
-  router.get('/', ({ res }) => serveStatic(res, webDir, '/index.html'))
+  router.mount('/assets', ({ req, res, params }) => serveStatic(req, res, webDir, params.rest))
+  router.get('/', ({ req, res }) => serveStatic(req, res, webDir, '/index.html'))
 
   return {
     db, router, config, opened, ingest,
@@ -478,24 +478,40 @@ function protocolDoc(config) {
   }
 }
 
-function serveStatic(res, webDir, relPath) {
+function serveStatic(req, res, webDir, relPath) {
   const rel = String(relPath || '/index.html').split('?')[0]
   const safe = normalize(rel).replace(/^([/\\.]+)/, '')
   const file = join(webDir, safe || 'index.html')
   if (!file.startsWith(normalize(webDir))) { sendError(res, 404, 'UNKNOWN_ROUTE', 'not found'); return }
   if (!existsSync(file) || !statSync(file).isFile()) {
     const fallback = join(webDir, 'index.html')
-    if (existsSync(fallback) && !extname(safe)) {
-      const html = readFileSync(fallback)
-      res.writeHead(200, { 'content-type': MIME['.html'], 'content-length': html.length })
-      res.end(html)
-      return
-    }
+    if (existsSync(fallback) && !extname(safe)) { sendFile(req, res, fallback); return }
     sendError(res, 404, 'UNKNOWN_ROUTE', 'not found')
     return
   }
+  sendFile(req, res, file)
+}
+
+/**
+ * 静态文件响应：内容哈希作 ETag + no-cache（每次都协商，变了立刻生效）。
+ * 之所以强制协商：看板曾因浏览器沿用旧的 app.js 而「修复不生效」，
+ * 这类问题排查成本极高，宁可每次多一个 304。
+ */
+function sendFile(req, res, file) {
   const buf = readFileSync(file)
-  res.writeHead(200, { 'content-type': MIME[extname(file).toLowerCase()] || 'application/octet-stream', 'content-length': buf.length })
+  const etag = '"' + createHash('sha256').update(buf).digest('hex').slice(0, 16) + '"'
+  const headers = {
+    'content-type': MIME[extname(file).toLowerCase()] || 'application/octet-stream',
+    etag,
+    'cache-control': 'no-cache',
+  }
+  if (String(req.headers['if-none-match'] || '') === etag) {
+    res.writeHead(304, headers)
+    res.end()
+    return
+  }
+  headers['content-length'] = buf.length
+  res.writeHead(200, headers)
   res.end(buf)
 }
 

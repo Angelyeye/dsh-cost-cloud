@@ -24,21 +24,33 @@ const data = {
 }
 
 async function boot() {
+  let authed = false
   try {
     const s = await api('session')
     setState({ authed: true, sessionExpiresAt: s.expiresAt })
+    authed = true
   } catch (e) {
     setState({ authed: false, error: '' })
   }
   render()
+  // 关键：带会话刷新页面时也必须拉数据（此前只有登录成功路径会调用 loadAll，
+  // 导致刷新后永远停在「加载中…」且没有任何数据请求）。
+  if (authed) await loadAll()
 }
 
 function render() {
   const root = document.getElementById('app')
-  root.innerHTML = ''
-  root.className = ''
-  if (!state.authed) { root.appendChild(loginView()); return }
-  root.appendChild(layout())
+  try {
+    root.innerHTML = ''
+    root.className = ''
+    if (!state.authed) { root.appendChild(loginView()); return }
+    root.appendChild(layout())
+  } catch (e) {
+    // 绝不允许因为渲染异常而留下空白页：把真实错误显示出来
+    root.className = ''
+    root.appendChild(el('div', { class: 'banner err', style: { margin: '24px' } },
+      ['界面渲染异常：' + (e && e.message ? e.message : String(e))]))
+  }
 }
 
 function loginView() {
@@ -72,7 +84,7 @@ function layout() {
     el('div', { class: 'brand' }, [el('span', { class: 'dot' }), el('span', {}, ['DSH 花费云端', el('span', { class: 'brand-sub' }, '多机 · 多 Agent')])]),
     ...VIEWS.map((v) => el('button', {
       class: 'nav-item ' + (state.view === v.id ? 'on' : ''),
-      onClick: () => { setState({ view: v.id, error: '', drill: null }); loadView(v.id) },
+      onClick: () => { setState({ view: v.id, error: '', drill: null }); render(); loadView(v.id) },
     }, [el('span', {}, v.icon), el('span', {}, v.label)])),
     el('div', { class: 'rail-foot' }, [
       el('div', {}, '服务 ' + (data.health ? 'v' + data.health.serviceVersion : '—')),
@@ -84,15 +96,21 @@ function layout() {
   return el('div', { class: 'layout' }, [nav, main])
 }
 
+// data.devices 保存的是 /devices 的整个响应对象 {ok, devices, sources}，
+// 不是数组 —— 这里统一取数组，避免把对象当数组遍历。
+function deviceList() {
+  return data.devices && Array.isArray(data.devices.devices) ? data.devices.devices : []
+}
+
 function header() {
   const rangeGroup = el('div', { class: 'btn-group' }, RANGES.map((r) => el('button', {
     class: state.range === r.id ? 'on' : '',
-    onClick: () => { setState({ range: r.id, recordsCursor: 0 }); loadView(state.view) },
+    onClick: () => { setState({ range: r.id, recordsCursor: 0 }); render(); loadView(state.view) },
   }, r.label)))
   const devSel = el('select', {
     class: 'select', multiple: 'true', size: '1',
     onChange: (e) => { setState({ filterDevices: Array.from(e.target.selectedOptions).map((o) => o.value) }); loadView(state.view) },
-  }, (data.devices || []).map((d) => el('option', { value: d.id, selected: state.filterDevices.includes(d.id) }, d.name)))
+  }, deviceList().map((d) => el('option', { value: d.id, selected: state.filterDevices.includes(d.id) }, d.name)))
   const srcSel = el('select', {
     class: 'select', multiple: 'true', size: '1',
     onChange: (e) => { setState({ filterSources: Array.from(e.target.selectedOptions).map((o) => o.value) }); loadView(state.view) },
@@ -312,12 +330,12 @@ function viewTrend() {
       el('span', { class: 'hint' }, '粒度'),
       el('div', { class: 'btn-group' }, ['day', 'week', 'month'].map((b) => el('button', {
         class: state.bucket === b ? 'on' : '',
-        onClick: () => { setState({ bucket: b }); loadView('trend') },
+        onClick: () => { setState({ bucket: b }); render(); loadView('trend') },
       }, b === 'day' ? '按天' : b === 'week' ? '按周' : '按月'))),
       el('span', { class: 'hint' }, '分组'),
       el('div', { class: 'btn-group' }, [['device', '设备'], ['source', 'Agent'], ['model', '模型'], ['project', '项目']].map(([k, label]) => el('button', {
         class: state.trendGroup === k ? 'on' : '',
-        onClick: () => { setState({ trendGroup: k }); loadView('trend') },
+        onClick: () => { setState({ trendGroup: k }); render(); loadView('trend') },
       }, label))),
     ]),
     stackedBars({ buckets: t.buckets, series }, { formatY: (v) => '¥' + fmtMoney(v, 2), labelSlice: state.bucket === 'month' ? 0 : 5 }),
