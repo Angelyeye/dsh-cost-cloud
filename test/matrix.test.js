@@ -13,6 +13,62 @@ import { resolveRange } from '../src/time.js'
 
 const T0 = Date.UTC(2026, 8, 12, 5, 0, 0)
 
+/**
+ * 管理端「统一响应契约」守卫。
+ *
+ * 背景（真实缺陷）：前端 web/state.js 的 api() 要求每个管理端响应带 `ok: true`，
+ * 否则抛错并中断渲染。曾因 `Q.matrix()` 漏了 `ok`，导致看板**卡在"加载中…"、导航点不动**，
+ * 而当时的矩阵测试因为用 interface 包装、HTTP 测试只断言 rows.length 而全部通过 —— 这是测试盲区。
+ * 因此这里逐个端点断言 `ok === true`，任何新端点漏加都会被立刻拦下。
+ */
+test('契约守卫：所有管理端 GET 接口都必须返回 ok:true（前端据此判定成功）', async () => {
+  const h = makeApp()
+  try {
+    seed(h.app)
+    const { cookie } = await login(h.app)
+    const endpoints = [
+      'overview?range=all',
+      'overview?range=all&union=' + encodeURIComponent(JSON.stringify([{ excludeDevice: 'dev-A' }])),
+      'groups?range=all&groupBy=device',
+      'matrix?range=all',
+      'trend?range=all&bucket=day&groupBy=device',
+      'models?range=all',
+      'devices',
+      'sources',
+      'records?range=all&limit=5',
+      'sessions?range=all&limit=5',
+      'sync-health',
+      'health',
+      'config',
+      'prices',
+      'audit?limit=5',
+    ]
+    for (const ep of endpoints) {
+      const r = await call(h.app, 'GET', '/api/admin/' + ep, null, '', cookie)
+      assert.equal(r.status, 200, ep + ' 状态码应为 200')
+      assert.equal(r.body.ok, true, ep + ' 响应必须带 ok:true（否则前端 api() 会抛错）')
+    }
+  } finally { h.cleanup() }
+})
+
+test('契约守卫：query 层各聚合函数直接调用时也返回 ok:true', () => {
+  const h = makeApp()
+  try {
+    seed(h.app)
+    const range = resolveRange({ range: 'all' }, Date.now())
+    const p = { fromMs: range.fromMs, toMs: range.toMs, range: 'all' }
+    assert.equal(Q.overview(h.app.db, p).ok, true, 'overview()')
+    assert.equal(Q.groups(h.app.db, Object.assign({}, p, { groupBy: ['device'] })).ok, true, 'groups()')
+    assert.equal(Q.matrix(h.app.db, p).ok, true, 'matrix()')
+    assert.equal(Q.trend(h.app.db, Object.assign({}, p, { bucket: 'day', groupBy: ['device'] })).ok, true, 'trend()')
+    assert.equal(Q.records(h.app.db, Object.assign({}, p, { limit: 5 })).ok, true, 'records()')
+    assert.equal(Q.sessions(h.app.db, Object.assign({}, p, { limit: 5 })).ok, true, 'sessions()')
+    assert.equal(Q.syncHealth(h.app.db, h.config).ok, true, 'syncHealth()')
+    assert.equal(Q.listDimensions(h.app.db).devices !== undefined, true, 'listDimensions()')
+    assert.equal(Q.overviewUnion(h.app.db, [p, p]).ok, true, 'overviewUnion()')
+  } finally { h.cleanup() }
+})
+
 /** 造 3 设备 × 多 Agent 的数据；返回期望的费用矩阵 */
 function seed(app) {
   const want = {}

@@ -192,7 +192,7 @@ export function groups(db, params) {
     for (let k = 0; k < exprs.length; k += 1) key[keys[k]] = String(r['g' + k] === null ? '' : r['g' + k])
     return Object.assign({ key }, mapRow(r))
   })
-  return { groupBy: keys, groups: out }
+  return { ok: true, groupBy: keys, groups: out }
 }
 
 /**
@@ -240,6 +240,7 @@ export function matrix(db, params) {
     })),
   })).sort((a, b) => b.cost - a.cost)
   return {
+    ok: true,
     row: rowBy, col: colBy, cols: Array.from(colSet).sort(),
     rows,
     totals: { calls: t.calls, tokens: t.tokens, cost: r4(t.cost), subCost: r4(t.subCost) },
