@@ -338,6 +338,7 @@ export function createServer(config, opts) {
       trustProxy: config.trustProxy === true,
       timezone: 'Asia/Shanghai (UTC+8)',
       todayKey: dayKey(Date.now()),
+      syncVer: config.syncVer,
       pricing: { source: PRICING_SOURCE, sourceHash: PRICING_SOURCE_HASH },
       insecureDev: config.insecureDev === true,
     }
