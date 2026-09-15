@@ -29,7 +29,13 @@ async function boot(over) {
   const { server, app, url } = await listen(config, { log: () => {} })
   return {
     app, url, config,
-    async close() { await new Promise((r) => server.close(r)); rmSync(dir, { recursive: true, force: true }) },
+    async close() {
+      await new Promise((r) => server.close(r))
+      // Windows 上 node:sqlite 的文件句柄在 close() 后短暂残留，立即 rmSync 会 EPERM。
+      // 用 Node 自带的重试退避兜住，且**清理失败不得让用例判红**（它是拆除动作，
+      // 与被测行为无关；临时目录由系统回收）。
+      try { rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }) } catch (e) {}
+    },
   }
 }
 
