@@ -94,7 +94,7 @@ export const RANGES = [
   { id: '30d', label: '近 30 天' },
   { id: 'month', label: '本月' },
   { id: 'year', label: '本年' },
-  { id: 'all', label: '全时段' },
+  { id: 'all', label: '全部' },
 ]
 
 export const SOURCE_COLORS = ['#4176e6', '#d97706', '#16a34a', '#7c3aed', '#dc2626', '#0891b2', '#c026d3', '#65a30d', '#ea580c', '#0ea5e9']

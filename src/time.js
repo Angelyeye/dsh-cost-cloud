@@ -79,6 +79,6 @@ export function resolveRange(q, now) {
     }
     case 'all':
     default:
-      return { range: 'all', fromMs: 0, toMs: t + 1, label: '全时段' }
+      return { range: 'all', fromMs: 0, toMs: t + 1, label: '全部' }
   }
 }

@@ -107,7 +107,7 @@ function mapRow(r) {
   }
 }
 
-/** 汇总卡片：今日 / 本月 / 全时段（全时段不受区间过滤，单列表） */
+/** 汇总卡片：今日 / 本月 / 全部（全部不受区间过滤，单列表） */
 export function totalsUnfiltered(db) {
   const row = db.prepare('SELECT ' + SELECT_METRICS + ` FROM records WHERE NOT (kind = 'detail' AND EXISTS (
       SELECT 1 FROM tombstones t WHERE t.device_id = records.device_id AND t.source = records.source

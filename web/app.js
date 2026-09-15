@@ -162,7 +162,7 @@ function viewOverview() {
     { title: '缓存命中率', value: hitRate.toFixed(1) + '%', sub: '命中 ' + fmtTokens(s.cacheRead) + ' / 未命中 ' + fmtTokens(s.input) },
     { title: '今日（北京）', value: '¥' + fmtMoney(o.today.realCost), sub: fmtInt(o.today.calls) + ' 次 · ' + fmtTokens(o.today.tokens) },
     { title: '本月（北京）', value: '¥' + fmtMoney(o.month.realCost), sub: fmtInt(o.month.calls) + ' 次 · ' + fmtTokens(o.month.tokens) },
-    { title: '全时段累计', value: '¥' + fmtMoney(o.all.realCost), sub: '自 ' + (o.firstTs ? fmtTime(o.firstTs) : '—') + ' 起' },
+    { title: '全部累计', value: '¥' + fmtMoney(o.all.realCost), sub: '自 ' + (o.firstTs ? fmtTime(o.firstTs) : '—') + ' 起' },
   ]))
 
   wrap.appendChild(el('div', { class: 'panel' }, [
