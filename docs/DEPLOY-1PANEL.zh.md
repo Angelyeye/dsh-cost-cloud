@@ -196,6 +196,35 @@ docker run --rm -v dsh_data:/data -v "$PWD:/backup" alpine \
 **升级流程**：在服务器上 `git pull`（或重新 scp 覆盖）→ `$DC up -d --build`。
 数据库迁移在启动时自动执行，且迁移前会把旧库备份到 `data/backups/`（卷内，保留最近 7 份）。
 
+### 6b. 本机（Windows）远程运维速查
+
+服务器：`ubuntu@81.71.157.148`（腾讯云轻量，`VM-0-5-ubuntu`），部署目录 `/opt/dsh-cost-cloud`，
+容器 `dsh-cost-cloud` 只绑 `127.0.0.1:8787`，对外由 1Panel 反代到 `https://tokencost.angelyeye.com.cn`。
+
+**登录**：用工作区里的部署密钥（与服务器 `authorized_keys` 中的 `dshc-deploy` 配对）：
+
+```powershell
+$key = "C:\Users\59531\Documents\DeepSeek工作区\.deploy-keys\id_dshc_deploy"
+ssh -i $key -o IdentitiesOnly=yes ubuntu@81.71.157.148
+```
+
+**docker 权限**：`ubuntu` 不在 docker 组（需重新登录才生效），用 `sudo -n docker`（已配免密）。
+
+**⚠️ GitHub 直连极不稳定**（实测单个 HTTPS 请求 17s，`git fetch` 会挂住甚至 135s 超时失败）。
+仓库是**浅克隆**（`git rev-parse --is-shallow-repository` 为 true），因此更新走镜像 + 浅拉取 + reset：
+
+```bash
+cd /opt/dsh-cost-cloud
+git status --porcelain                       # 必须为空
+cp -a .env /tmp/dsh-cost-cloud.env.bak       # 保险（.env 未被跟踪，reset 不会动它）
+git fetch --depth=1 https://ghfast.top/https://github.com/Angelyeye/dsh-cost-cloud.git main
+git reset --hard FETCH_HEAD                  # 浅仓库不要用 merge（会报 unrelated histories）
+sudo -n docker compose -f docker-compose.yml -f docker-compose.1panel.yml up -d --build
+curl -fsS http://127.0.0.1:8787/api/v1/health | head -c 200   # 看 serviceVersion 与 caps
+```
+
+镜像可用性：`ghfast.top` / `ghproxy.net` 约 0.8s 响应；`gh-proxy.top` 在本机解析失败，勿用。
+
 ---
 
 ## 7. 1Panel 使用小贴士
