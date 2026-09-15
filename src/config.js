@@ -104,6 +104,9 @@ export function resolveConfig(env, opts) {
     adminPassword,
     adminSessionTtlMs: intIn(e.ADMIN_SESSION_TTL_HOURS, 1, 24 * 30, 24 * 30) * 3600000,
     allowSelfRegister: bool(e.ALLOW_DEVICE_SELF_REGISTER, false),
+    // 设备令牌（含共享引导令牌）是否可读只读聚合接口 /api/v1/overview|matrix|devices。
+    // 采集端插件要用它读云端看板数据，默认开启；设为 0 可关闭，管理接口不受影响。
+    allowDeviceRead: bool(e.ALLOW_DEVICE_READ, true),
     syncToken,
     trustProxy: bool(e.TRUST_PROXY, false),
     insecureDev: allowInsecure,

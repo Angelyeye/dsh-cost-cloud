@@ -213,9 +213,9 @@ export function createServer(config, opts) {
     }
   }
 
-  router.get('/api/admin/overview', ({ req, query }) => {
-    requireAdmin(req)
-    // union=<JSON 数组>：把多组过滤条件的概览相加（「本机+云端」这类并集口径）
+  /** 只读聚合：概览（支持 union=<JSON 数组>，把多组过滤条件的概览相加——「本机+云端」这类并集口径）。
+   *  管理员会话与设备令牌两条路共用同一实现，避免两份口径漂移。 */
+  const readOverview = (query) => {
     if (query.union) {
       let parts = null
       try { parts = JSON.parse(query.union) } catch (e) { throw new HttpError(400, 'INVALID_BODY', 'union 必须是 JSON 数组') }
@@ -225,12 +225,16 @@ export function createServer(config, opts) {
       return Q.overviewUnion(db, parts.map((p) => adminParams(Object.assign({ range: query.range, days: query.days }, p || {}))))
     }
     return Q.overview(db, adminParams(query))
-  })
+  }
+  const readMatrix = (query) => Q.matrix(db, adminParams(query))
+  const readDevices = () => Object.assign({ ok: true }, Q.listDimensions(db))
+
+  router.get('/api/admin/overview', ({ req, query }) => { requireAdmin(req); return readOverview(query) })
   router.get('/api/admin/groups', ({ req, query }) => {
     requireAdmin(req)
     return Q.groups(db, Object.assign(adminParams(query), { groupBy: query.groupBy || 'source' }))
   })
-  router.get('/api/admin/matrix', ({ req, query }) => { requireAdmin(req); return Q.matrix(db, adminParams(query)) })
+  router.get('/api/admin/matrix', ({ req, query }) => { requireAdmin(req); return readMatrix(query) })
   router.get('/api/admin/trend', ({ req, query }) => {
     requireAdmin(req)
     return Q.trend(db, Object.assign(adminParams(query), { bucket: query.bucket || 'day', groupBy: query.groupBy || 'source' }))
@@ -248,7 +252,22 @@ export function createServer(config, opts) {
       })),
     }
   })
-  router.get('/api/admin/devices', ({ req }) => { requireAdmin(req); return Object.assign({ ok: true }, Q.listDimensions(db)) })
+  router.get('/api/admin/devices', ({ req }) => { requireAdmin(req); return readDevices() })
+
+  // ---------------- 采集端只读查询（设备令牌） ----------------
+  // 采集端插件手里只有设备令牌 / 共享引导令牌，拿不到管理员会话；这里给它一组**只读**聚合接口，
+  // 供「仅云端 / 本机+云端」视图读取。写入、配置、令牌管理、审计等管理接口仍只认管理员会话。
+  // 可用 ALLOW_DEVICE_READ=0 关闭（默认开启）。
+  const requireDeviceRead = (req) => {
+    if (config.allowDeviceRead !== true) {
+      throw new HttpError(403, 'DEVICE_READ_DISABLED', '服务端未开启设备只读查询（设置 ALLOW_DEVICE_READ=1）')
+    }
+    return authenticate(req, db, config)
+  }
+  router.get('/api/v1/overview', ({ req, query }) => { requireDeviceRead(req); return readOverview(query) })
+  router.get('/api/v1/matrix', ({ req, query }) => { requireDeviceRead(req); return readMatrix(query) })
+  router.get('/api/v1/devices', ({ req }) => { requireDeviceRead(req); return readDevices() })
+
   router.get('/api/admin/devices/:id', ({ req, params }) => {
     requireAdmin(req)
     const dims = Q.listDimensions(db)

@@ -89,6 +89,25 @@ node docs/examples/conformance.mjs
 node docs/examples/conformance.mjs --base http://127.0.0.1:8787 --token dshc_xxx
 ```
 
+### 采集端只读查询（设备令牌可读）
+
+采集端插件手里只有**设备令牌 / 共享引导令牌**，拿不到管理员会话；因此云端另开了一组**只读**聚合接口，用同一个令牌鉴权，供插件渲染「仅云端 / 本机+云端」视图：
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /api/v1/overview?range=7d&days=7` | 概览聚合；支持 `devices` / `sources` / `excludeDevice` / `excludeSource`，也支持 `union=<JSON数组>` 把多组过滤条件的概览相加（插件「本机+云端」用的就是它） |
+| `GET /api/v1/matrix?range=7d` | 「设备 × Agent」二维矩阵 |
+| `GET /api/v1/devices` | 设备 / 来源维度清单（插件据此把 deviceId 显示成设备名） |
+
+```bash
+curl -H "Authorization: Bearer $DSH_SYNC_TOKEN" "http://127.0.0.1:8787/api/v1/overview?range=7d"
+```
+
+- 鉴权与上报完全一致（`Authorization: Bearer <设备令牌或共享引导令牌>`）：缺令牌 401 `TOKEN_MISSING`，错令牌 401 `TOKEN_INVALID`。
+- **只读**：写数据、改配置、管令牌、看审计仍然只认管理员会话；设备令牌访问 `/api/admin/*` 一律 401。
+- 返回结构与同名管理接口**逐项一致**（共用同一实现），插件的两种视图口径因此与看板相同。
+- 可用 `ALLOW_DEVICE_READ=0` 关闭（返回 403 `DEVICE_READ_DISABLED`），默认开启。
+
 ### 三个必须遵守的约定
 
 1. **同一台机器上的所有 agent 必须共用同一个 `machineId`** —— 建议读写共享文件 `~/.dsh-cost/device.json`（可用 `DSH_COST_HOME` 覆盖目录）。
