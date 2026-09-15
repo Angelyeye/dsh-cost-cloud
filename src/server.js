@@ -228,6 +228,23 @@ export function createServer(config, opts) {
   }
   const readMatrix = (query) => Q.matrix(db, adminParams(query))
   const readDevices = () => Object.assign({ ok: true }, Q.listDimensions(db))
+  /**
+   * 采集端只读「插件形状」聚合：字段名与插件本地 buildDashboard 完全一致
+   * （today/month/all 的 real/sub/calls/tokens + byDay/byModel/byModelDay/recent），
+   * 使看板三态视图可直接渲染或相加，不依赖插件侧的字段名适配。
+   * 与 overview 同样支持 union（「本机+云端」并集口径）。
+   */
+  const readPluginView = (query) => {
+    if (query.union) {
+      let parts = null
+      try { parts = JSON.parse(query.union) } catch (e) { throw new HttpError(400, 'INVALID_BODY', 'union 必须是 JSON 数组') }
+      if (!Array.isArray(parts) || !parts.length || parts.length > 8) {
+        throw new HttpError(400, 'INVALID_BODY', 'union 需为 1..8 项的数组')
+      }
+      return Q.pluginViewUnion(db, parts.map((p) => adminParams(Object.assign({ range: query.range, days: query.days }, p || {}))))
+    }
+    return Q.pluginView(db, adminParams(query))
+  }
 
   router.get('/api/admin/overview', ({ req, query }) => { requireAdmin(req); return readOverview(query) })
   router.get('/api/admin/groups', ({ req, query }) => {
@@ -267,6 +284,7 @@ export function createServer(config, opts) {
   router.get('/api/v1/overview', ({ req, query }) => { requireDeviceRead(req); return readOverview(query) })
   router.get('/api/v1/matrix', ({ req, query }) => { requireDeviceRead(req); return readMatrix(query) })
   router.get('/api/v1/devices', ({ req }) => { requireDeviceRead(req); return readDevices() })
+  router.get('/api/v1/plugin-view', ({ req, query }) => { requireDeviceRead(req); return readPluginView(query) })
 
   router.get('/api/admin/devices/:id', ({ req, params }) => {
     requireAdmin(req)
@@ -454,6 +472,10 @@ function caps(config) {
     maxBodyBytes: config.maxBodyBytes,
     rateLimitPerMin: config.rateLimitPerMin,
     groupBy: ['device', 'source', 'agentInstance', 'model', 'provider', 'project', 'day', 'month', 'kind'],
+    // 采集端可读的「插件形状」聚合（byDay / byModel / byModelDay / recent），供看板三态视图
+    // 的「仅云端」渲染柱状图、分模型明细与最近记录；旧版云端没有该能力，插件会自动回退到
+    // /api/v1/overview 的概览口径（金额卡可用，图表为空）。
+    devicePluginView: true,
   }
 }
 

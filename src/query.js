@@ -129,6 +129,31 @@ export function totalsUnfiltered(db) {
   }
 }
 
+/**
+ * 概览三切片（今日 / 本月 / 全时段）——**带过滤条件**，插件形状聚合专用。
+ *
+ * 与 totalsUnfiltered 的区别：那张表在「仅云端」用在**全网**口径的概览上（今日/本月/
+ * 总花费要跨设备可比），而插件形状聚合可能是「排除本机」或「并集」的一段，
+ * 三切片必须落在同一过滤条件下，否则「仅云端 / 本机+云端」的金额卡会凭空变大。
+ */
+function totalsFiltered(db, params) {
+  const w = buildWhere(params)
+  // 日/月切片不带时间边界：注意必须传 null 而不是 0 —— buildWhere 用 Number.isFinite 判断，
+  // 传 0 会生成 `ts < 0`（恒假），切片永远为空。
+  const dayWhere = buildWhere(Object.assign({}, params, { fromMs: null, toMs: null }))
+  const all = mapRow(db.prepare(`SELECT ${SELECT_METRICS} FROM records WHERE ${w.sql}`).get(...w.params))
+  const now = Date.now()
+  const today = mapRow(db.prepare(`SELECT ${SELECT_METRICS} FROM records WHERE ${dayWhere.sql} AND day_key = ?`).get(...dayWhere.params, dayKey(now)))
+  const month = mapRow(db.prepare(`SELECT ${SELECT_METRICS} FROM records WHERE ${dayWhere.sql} AND month_key = ?`).get(...dayWhere.params, monthKey(now)))
+  const slice = (x) => ({
+    // real/sub 必须**互斥**（本地 buildDashboard 口径）：calls/tokens 只含按量，
+    // 订阅另计 subCalls/subTokens —— 看板「API 请求次数」主值就是 calls + subCalls。
+    real: r4(n0(x.realCost)), calls: n0(x.realCalls), tokens: n0(x.realTokens),
+    sub: r4(n0(x.subCost)), subCalls: n0(x.subCalls), subTokens: n0(x.subTokens),
+  })
+  return { today: slice(today), month: slice(month), all: slice(all) }
+}
+
 function aliveClause(alias) {
   const a = alias ? alias + '.' : 'records.'
   return `NOT (kind = 'detail' AND EXISTS (SELECT 1 FROM tombstones t WHERE t.device_id = ${a}device_id AND t.source = ${a}source
@@ -333,6 +358,105 @@ function addSliceLocal(a, b) {
   }
 }
 
+/**
+ * 插件形状聚合的**并集**（「本机+云端」= ① 其他整机 ② 本机上的其它 agent）：
+ * 逐部分算 pluginView 后相加，口径与 overviewUnion 一致。
+ * 白天/分模型序列按日期与模型键合并，最近记录按时间倒序拼接去重（保留 20 条）。
+ */
+export function pluginViewUnion(db, parts) {
+  const list = (parts || []).filter(Boolean)
+  if (list.length === 1) return pluginView(db, list[0])
+  const outs = list.map((p) => pluginView(db, p))
+  const base = outs[0]
+  const acc = {
+    ok: true, source: 'cloud', union: true, days: base.days,
+    parts: list.map((p) => ({
+      devices: csvList(p.devices), sources: csvList(p.sources),
+      excludeDevice: toStr(p.excludeDevice), excludeSource: toStr(p.excludeSource),
+    })),
+    today: null, month: null, all: null,
+    byDay: [], byModel: [], byModelDay: [], recent: [],
+    devices: [], sources: [], asOf: Date.now(),
+    range: base.range,
+  }
+  const dayMap = new Map()
+  const modelMap = new Map()
+  const modelDayMap = new Map()
+  const recentSeen = new Set()
+  const devMap = new Map()
+  const srcMap = new Map()
+  for (const o of outs) {
+    acc.today = addSliceLocal(acc.today, o.today)
+    acc.month = addSliceLocal(acc.month, o.month)
+    acc.all = addSliceLocal(acc.all, o.all)
+    for (const d of o.byDay || []) {
+      const cur = dayMap.get(d.date) || { date: d.date, label: d.label, peak: 0, off: 0, flat: 0, calls: 0, tokens: 0, cost: 0 }
+      cur.peak += d.peak || 0; cur.off += d.off || 0; cur.flat += d.flat || 0
+      cur.calls += d.calls || 0; cur.tokens += d.tokens || 0; cur.cost += d.cost || 0
+      dayMap.set(d.date, cur)
+    }
+    for (const m of o.byModel || []) {
+      const cur = modelMap.get(m.model) || { model: m.model, subscription: !!m.subscription, estimated: !!m.estimated, calls: 0, tokens: 0, cost: 0 }
+      cur.calls += m.calls || 0; cur.tokens += m.tokens || 0; cur.cost += m.cost || 0
+      cur.subscription = cur.subscription && !!m.subscription
+      cur.estimated = cur.estimated || !!m.estimated
+      modelMap.set(m.model, cur)
+    }
+    for (const m of o.byModelDay || []) {
+      const cur = modelDayMap.get(m.model) || { model: m.model, subscription: !!m.subscription, estimated: !!m.estimated, days: new Map() }
+      for (const d of m.days || []) {
+        const cell = cur.days.get(d.date) || { date: d.date, label: d.label, calls: 0, tokens: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 }
+        cell.calls += d.calls || 0; cell.tokens += d.tokens || 0; cell.input += d.input || 0; cell.output += d.output || 0
+        cell.cacheRead += d.cacheRead || 0; cell.cacheWrite += d.cacheWrite || 0; cell.cost += d.cost || 0
+        cur.days.set(d.date, cell)
+      }
+      modelDayMap.set(m.model, cur)
+    }
+    for (const r of o.recent || []) {
+      const key = [r.ts, r.device, r.sessionId, r.model, r.calls, r.cost].join('|')
+      if (recentSeen.has(key)) continue
+      recentSeen.add(key)
+      acc.recent.push(r)
+    }
+    for (const d of o.devices || []) {
+      const cur = devMap.get(d.device) || { device: d.device, name: d.name, cost: 0, calls: 0, tokens: 0, sources: new Set() }
+      cur.cost += d.cost || 0; cur.calls += d.calls || 0; cur.tokens += d.tokens || 0
+      for (const s of d.sources || []) cur.sources.add(s)
+      devMap.set(d.device, cur)
+    }
+    for (const s of o.sources || []) {
+      const cur = srcMap.get(s.source) || { source: s.source, cost: 0, calls: 0, tokens: 0, devices: new Set() }
+      cur.cost += s.cost || 0; cur.calls += s.calls || 0; cur.tokens += s.tokens || 0
+      for (const d of s.devices || []) cur.devices.add(d)
+      srcMap.set(s.source, cur)
+    }
+  }
+  const dates = Array.from(dayMap.keys()).sort()
+  acc.byDay = dates.map((d) => {
+    const x = dayMap.get(d)
+    return { date: d, label: x.label, peak: r4(x.peak), off: r4(x.off), flat: r4(x.flat), calls: x.calls, tokens: x.tokens, cost: r4(x.cost) }
+  })
+  acc.byModel = Array.from(modelMap.values())
+    .map((m) => ({ model: m.model, subscription: m.subscription, estimated: m.estimated, calls: m.calls, tokens: m.tokens, cost: r4(m.cost) }))
+    .sort((a, b) => b.cost - a.cost)
+  acc.byModelDay = Array.from(modelDayMap.values()).map((m) => ({
+    model: m.model, subscription: m.subscription, estimated: m.estimated,
+    days: dates.map((d) => {
+      const c = m.days.get(d)
+      if (!c) return { date: d, label: (dayMap.get(d) || {}).label || d, calls: 0, tokens: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 }
+      return Object.assign({}, c, { cost: r4(c.cost) })
+    }),
+  }))
+  acc.recent = acc.recent.sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 20)
+  acc.devices = Array.from(devMap.values()).map((d) => ({
+    device: d.device, name: d.name, cost: r4(d.cost), calls: d.calls, tokens: d.tokens, sources: Array.from(d.sources).sort(),
+  })).sort((a, b) => b.cost - a.cost)
+  acc.sources = Array.from(srcMap.values()).map((s) => ({
+    source: s.source, cost: r4(s.cost), calls: s.calls, tokens: s.tokens, devices: Array.from(s.devices).sort(),
+  })).sort((a, b) => b.cost - a.cost)
+  return acc
+}
+
 /** 概览（与插件 buildDashboard 字段对齐，便于插件三态视图直接消费） */
 export function overview(db, params) {
   const w = buildWhere(params)
@@ -388,7 +512,11 @@ export function pluginView(db, params) {
   const days = Number.isFinite(Number(params.days)) && Number(params.days) > 0 ? Math.floor(Number(params.days)) : 7
   const now = Date.now()
   const cutoff = days > 0 ? now - days * DAY_MS : 0
-  const startKey = dayKey(cutoff)
+  // range=all（或 days<=0）时按**数据实际起点**铺日期轴，让「全部」在云端视图里也是全部
+  const allTime = days <= 0 || params.range === 'all'
+  const firstRow = db.prepare(`SELECT MIN(${TS_EXPR}) AS t FROM records WHERE ${w.sql}`).get(...w.params)
+  const firstTs = Number(firstRow && firstRow.t) || 0
+  const startKey = dayKey(allTime && firstTs ? firstTs : cutoff)
   const endKey = dayKey(now)
   const dates = enumerateDays(startKey, endKey)
 
@@ -445,21 +573,20 @@ export function pluginView(db, params) {
     if (m.subscription) { sub.cost += m.cost; sub.calls += m.calls; sub.tokens += m.tokens }
     else { real.cost += m.cost; real.calls += m.calls; real.tokens += m.tokens }
   }
-  // 今日 / 本月（北京日历）：与本地 buildDashboard 同口径，便于三态视图直接相加
-  const totals = totalsUnfiltered(db)
+  // 今日 / 本月 / 全时段（北京日历）：与本地 buildDashboard 同口径、**同过滤条件**，
+  // 便于三态视图直接相加（此前用 totalsUnfiltered 会绕过 excludeDevice 导致相加偏大）
+  const totals = totalsFiltered(db, params)
+  const scopeTot = mapRow(db.prepare(`SELECT ${SELECT_METRICS} FROM records WHERE ${w.sql}`).get(...w.params))
   return {
     ok: true,
     days: days,
     source: 'cloud',
-    realCost: r4(n0(tot.realCost)), realCalls: tot.realCalls, realTokens: tot.realTokens,
-    subEquivalent: r4(n0(tot.subCost)), subCalls: tot.subCalls, subTokens: tot.subTokens,
-    peakCost: r4(n0(tot.peak)), offCost: r4(n0(tot.off)), flatCost: r4(n0(tot.flat)),
-    today: { real: r4(totals.today.realCost), calls: totals.today.calls, tokens: totals.today.tokens, sub: r4(totals.today.subCost), subCalls: 0, subTokens: 0 },
-    month: { real: r4(totals.month.realCost), calls: totals.month.calls, tokens: totals.month.tokens, sub: r4(totals.month.subCost), subCalls: 0, subTokens: 0 },
-    all: {
-      real: r4(totals.all.realCost), calls: totals.all.calls, tokens: totals.all.tokens,
-      sub: r4(totals.all.subCost), subCalls: totals.all.subCalls, subTokens: totals.all.subTokens,
-    },
+    realCost: totals.all.real, realCalls: totals.all.calls, realTokens: totals.all.tokens,
+    subEquivalent: totals.all.sub, subCalls: totals.all.subCalls, subTokens: totals.all.subTokens,
+    peakCost: r4(n0(scopeTot.peak)), offCost: r4(n0(scopeTot.off)), flatCost: r4(n0(scopeTot.flat)),
+    today: totals.today,
+    month: totals.month,
+    all: totals.all,
     byDay: dates.map((d) => {
       const r = dayMap.get(d)
       return {
