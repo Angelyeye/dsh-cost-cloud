@@ -213,6 +213,28 @@ test/           node --test 测试
 
 ## 更新记录
 
+### v1.2.1
+
+- **修复：`overview` 的三切片（今日 / 本月 / 总花费）无视过滤条件** —— 原取自 `totalsUnfiltered`（无条件下全表），
+  于是 `excludeDevice` / `devices` 等参数对它们完全无效。对「本机+云端」是硬伤：该视图走
+  `GET /api/v1/overview?union=[…]`，把两份「全网切片」相加 → **调用次数翻倍、金额被写成 0**。
+  现改为按同一过滤条件取切片（与 `plugin-view` 同源实现 `totalsFiltered`）。
+- 回归测试 `test/plugin-view.test.js` 增加 union 用例（断言 union 后的 `all.real` / `summary.realCost`
+  等于各部分的**和**，且不重复计数）；插件侧 `test/cloud-view-e2e.test.js` 增加宿主实际调用形态的端到端断言。
+
+### v1.2.0
+
+- 新增**采集端只读「插件形状」聚合** `GET /api/v1/plugin-view`（设备令牌可读，`caps.devicePluginView=true`）：
+  字段名与插件本地 `buildDashboard` 逐项一致（`today/month/all` 的 `real/sub/calls/tokens` +
+  `byDay/byModel/byModelDay/recent`），支持 `union` 并集。此前只有 `/api/v1/overview` 的概览卡片，
+  插件「仅云端」视图的消费柱状图、分模型明细与最近记录**注定为空**。
+- **修复：`pluginView` 的三切片绕过过滤**（同上，见 v1.2.1 说明，两处一并修正）。
+- **修复：日/月切片恒空** —— `buildWhere` 用 `Number.isFinite` 判断时间边界，传 `fromMs/toMs = 0`
+  会生成 `ts < 0`（恒假），现传 `null`。
+- **修复：`calls/tokens` 与订阅口径不互斥** —— 改为只含按量（`real_calls/real_tokens`），
+  订阅另计 `subCalls/subTokens`，与插件本地口径一致（看板「API 请求次数」主值 = `calls + subCalls`）。
+- `range=all` 时 `pluginView` 的日期轴按**数据实际起点**铺设，「全部」在云端视图里也是全部。
+
 ### v1.1.1
 
 - 看板「概览」的时间范围按钮由「全时段」改称「**全部**」，概览卡片标题改为「**全部累计**」，

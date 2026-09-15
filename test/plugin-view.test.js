@@ -174,3 +174,27 @@ test('range=all 时日期轴覆盖数据起点（「全部」在云端视图里�
     assert.ok(Math.abs(r.body.all.real - 3.0) < 1e-9, 'all.real=3.0，实际 ' + r.body.all.real)
   } finally { await s.close() }
 })
+
+test('overview 的三切片同样受过滤约束（union 相加不得重复计数）', async () => {
+  const s = await boot()
+  try {
+    const { tokenA } = seed(s.app)
+    const all = await devGet(s.url, tokenA, 'overview?range=all')
+    const other = await devGet(s.url, tokenA, 'overview?range=all&excludeDevice=machine-A')
+    // 全网：按量 2.0（A=1.5+0.4订阅、B=0.5）→ all.realCost 应为 2.0
+    assert.ok(Math.abs(all.body.all.real - 2.0) < 1e-9, '全网 all.real=' + all.body.all.real)
+    assert.ok(Math.abs(all.body.summary.realCost - 2.0) < 1e-9, '全网 summary.realCost=' + all.body.summary.realCost)
+    // 排除 A 后只剩 B：0.5 —— 旧实现取自全表，这里会错误地仍是 2.0
+    assert.ok(Math.abs(other.body.all.real - 0.5) < 1e-9, '排除 A 后 all.real 应剩 0.5，实际 ' + other.body.all.real)
+    assert.equal(other.body.all.calls, 1, '排除 A 后按量调用 1 次，实际 ' + other.body.all.calls)
+    assert.ok(Math.abs(other.body.month.real - 0.5) < 1e-9, 'month 切片同样受限，实际 ' + other.body.month.real)
+
+    // union：两部分相加 —— 这里是「排除 A」+「A 上非 dsh 来源（空）」= 0.5
+    const union = JSON.stringify([{ excludeDevice: 'machine-A' }, { devices: 'machine-A', excludeSource: 'dsh' }])
+    const u = await devGet(s.url, tokenA, 'overview?range=all&union=' + encodeURIComponent(union))
+    assert.equal(u.body.ok, true)
+    assert.ok(Math.abs(u.body.all.real - 0.5) < 1e-9, 'union all.real 应为 0.5，实际 ' + u.body.all.real)
+    assert.equal(u.body.all.calls, 1, 'union 不得重复计数（应为 1 次，实际 ' + u.body.all.calls + '）')
+    assert.equal(u.body.summary.realCost, 0.5, 'union summary.realCost=' + u.body.summary.realCost)
+  } finally { await s.close() }
+})

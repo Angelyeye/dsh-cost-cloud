@@ -130,11 +130,15 @@ export function totalsUnfiltered(db) {
 }
 
 /**
- * 概览三切片（今日 / 本月 / 全时段）——**带过滤条件**，插件形状聚合专用。
+ * 概览三切片（今日 / 本月 / 全时段）——**带过滤条件**。
  *
- * 与 totalsUnfiltered 的区别：那张表在「仅云端」用在**全网**口径的概览上（今日/本月/
- * 总花费要跨设备可比），而插件形状聚合可能是「排除本机」或「并集」的一段，
- * 三切片必须落在同一过滤条件下，否则「仅云端 / 本机+云端」的金额卡会凭空变大。
+ * 为什么必须带过滤：切片会被相加（union 并集 = 「本机+云端」），也可能被独立展示
+ * （某台设备 / 某个来源的概览）。若切片取自全表（曾用 totalsUnfiltered），
+ * 过滤参数就被整体忽略：**union 相加时把全网总额加两遍**（calls 翻倍、real 被覆盖成 0），
+ * 而按设备筛选的视图会显示全网数字。
+ *
+ * 注意：`totalsUnfiltered` 仍保留给需要「全网基线」的场景（如无过滤条件时的对比），
+ * 但**任何带过滤的聚合都必须走本函数**。
  */
 function totalsFiltered(db, params) {
   const w = buildWhere(params)
@@ -462,7 +466,9 @@ export function overview(db, params) {
   const w = buildWhere(params)
   const row = mapRow(db.prepare(`SELECT ${SELECT_METRICS} FROM records WHERE ${w.sql}`).get(...w.params))
   const now = Date.now()
-  const totals = totalsUnfiltered(db)
+  // 三切片必须**受同一过滤条件约束**（曾用 totalsUnfiltered：过滤参数被整体忽略，
+  // 于是 union（「本机+云端」并集）相加时把全网总额加了两遍 —— calls 翻倍、real 被覆盖成 0）
+  const totals = totalsFiltered(db, params)
   const g = groups(db, Object.assign({}, params, { groupBy: ['device', 'source'] }))
   const dims = listDimensions(db)
   const nameOf = new Map(dims.devices.map((d) => [d.id, d.name]))
