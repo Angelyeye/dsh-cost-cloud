@@ -12,7 +12,7 @@ import { createServer } from 'node:http'
 import { installDom, byClass, waitFor } from './dom-shim.mjs'
 import { makeApp, addDevice, ingestDirect, rec } from './helpers.js'
 
-test('全栈：真实数据下 7 个视图全部渲染成功', async () => {
+test('全栈：真实数据下 10 个视图全部渲染成功', async () => {
   const { app, cleanup } = makeApp({ ALLOW_DEVICE_SELF_REGISTER: '1' })
   const server = createServer((req, res) => app.handle(req, res))
   await new Promise((r) => server.listen(0, '127.0.0.1', r))
@@ -62,24 +62,44 @@ test('全栈：真实数据下 7 个视图全部渲染成功', async () => {
     // ---------- 概览：真实设备与 Agent 都要出现 ----------
     const overview = root.textContent
     assert.match(overview, /¥/, '概览应显示金额')
-    byClass(root, 'nav-item')[2].click() // 设备
+    // 切片字段名（real / sub）读错时，这三张卡会全部显示 ¥0.0000：全时段与时间无关，必须非零
+    assert.match(overview, /全部累计¥4\.25/, '全部累计切片必须读到真实金额')
+    assert.doesNotMatch(overview, /全部累计¥0\.0000/, '切片不得退化成 0.0000')
+    byClass(root, 'nav-item')[5].click() // 设备
     assert.ok(await waitFor(() => /设备清单（2）/.test(root.textContent)), '设备页应列出 2 台设备')
     assert.match(root.textContent, /办公台式机/)
     assert.match(root.textContent, /笔记本/)
 
     // ---------- 记录：两个 Agent 的明细都要在 ----------
-    byClass(root, 'nav-item')[5].click()
+    byClass(root, 'nav-item')[7].click()
     assert.ok(await waitFor(() => /记录明细/.test(root.textContent)), '记录页应渲染')
     assert.match(root.textContent, /dsh/)
     assert.match(root.textContent, /codex/)
 
     // ---------- 模型：真实 provider/model 落表 ----------
-    byClass(root, 'nav-item')[4].click()
+    byClass(root, 'nav-item')[6].click()
     assert.ok(await waitFor(() => /deepseek-v4\.1-flash/.test(root.textContent)), '模型页应出现真实模型名')
     assert.match(root.textContent, /gpt-5-codex/)
 
-    // ---------- 逐个走完 7 个视图：不允许任何渲染异常或卡加载 ----------
-    for (let i = 0; i < 7; i += 1) {
+    // ---------- 热力图：真实数据必须铺满日历格（含没有记录的空格） ----------
+    byClass(root, 'nav-item')[1].click()
+    assert.ok(await waitFor(() => /日历热力图/.test(root.textContent)), '热力图应渲染')
+    {
+      const cells = byClass(root, 'heat-cell').filter((n) => n.dataset && n.dataset.date)
+      assert.ok(cells.length >= 90, '近 90 天窗口应铺满 ≥90 个日历格，实际 ' + cells.length)
+      assert.ok(cells.some((c) => /(^|\s)l[1-4](\s|$)/.test(c.className)), '有花费的日子必须着色')
+      assert.equal(byClass(root, 'hg-cell').length, 168, '星期×小时必须恒为 168 格')
+      // 真实明细的 ts 落在 1 小时前 → 时段格必须有非零值（证明 ts 分桶真的生效）
+      assert.ok(byClass(root, 'hg-cell').some((c) => /(^|\s)l[1-4](\s|$)/.test(c.className)), '时段格应命中真实明细的时间戳')
+    }
+
+    // ---------- 订阅页：没有订阅数据时必须给出可行动提示，而不是空白 ----------
+    byClass(root, 'nav-item')[3].click()
+    assert.ok(await waitFor(() => /订阅等效费用/.test(root.textContent)), '订阅页应渲染')
+    assert.match(root.textContent, /没有订阅记录|订阅套餐明细/)
+
+    // ---------- 逐个走完 10 个视图：不允许任何渲染异常或卡加载 ----------
+    for (let i = 0; i < 10; i += 1) {
       const before = log.length
       byClass(root, 'nav-item')[i].click()
       await waitFor(() => log.length > before)

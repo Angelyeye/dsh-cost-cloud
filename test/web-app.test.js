@@ -17,7 +17,10 @@ const STATE_URL = new URL('../web/state.js', import.meta.url).href
 // ---------- 真实接口响应样本（形状与 src/query.js 输出一致，且刻意非空：
 //            空数组几乎不触发任何渲染分支，正是当初漏掉 bug 的原因） ----------
 const NOW = Date.now()
-const money = (cost, calls, tokens) => ({ realCost: cost, calls, tokens, realCalls: calls, realTokens: tokens, subEquivalent: 0, subCalls: 0, subTokens: 0 })
+// 注意：概览三切片的**真实**形状是 {real, sub, calls, tokens, subCalls, subTokens}
+// （与插件本地 buildDashboard 同形），**不是** realCost/subEquivalent ——
+// 早期样本写成 realCost，掩盖了「今日 / 本月 / 全部累计」长期显示 ¥0.0000 的缺陷。
+const money = (cost, calls, tokens) => ({ real: cost, sub: 0, calls, tokens, subCalls: 0, subTokens: 0 })
 const FIXTURES = {
   session: { ok: true, expiresAt: NOW + 3600000 },
   health: { ok: true, serviceVersion: '1.0.0', syncVer: 1, uptimeMs: 1234567, lastIngestAt: NOW - 60000, db: { file: '/data/cost.db', userVersion: 1 } },
@@ -93,6 +96,95 @@ const FIXTURES = {
       output: 300, calls: 1, cost: 0.05, costBasis: 'reported', subscription: false, estimated: false,
     }],
   },
+  // 热力图：形状与 src/query.js 的 heatmap() 输出一致（daily 补零铺满、hourly 恒为 7×24）
+  heatmap: heatFixture(),
+  subscriptions: subFixture(),
+}
+
+function heatFixture() {
+  const daily = []
+  for (let i = 29; i >= 0; i -= 1) {
+    const key = new Date(NOW - i * 86400000 + 28800000).toISOString().slice(0, 10)
+    const cost = i % 6 === 0 ? 0 : Math.round((1 + (i % 5)) * 37) / 100
+    daily.push({
+      date: key, label: key.slice(5).replace('-', '/'), dow: new Date(key + 'T00:00:00Z').getUTCDay(),
+      cost, realCost: cost, subCost: 0, calls: cost > 0 ? 4 : 0, tokens: 1200, input: 800, output: 400,
+      cacheRead: 2000, peak: cost * 0.4, off: cost * 0.6,
+    })
+  }
+  const hourly = []
+  for (let dow = 0; dow < 7; dow += 1) {
+    for (let hour = 0; hour < 24; hour += 1) {
+      const peakSlot = dow >= 1 && dow <= 5 && ((hour >= 9 && hour < 12) || (hour >= 14 && hour < 18))
+      const cost = hour >= 9 && hour <= 20 ? Math.round((hour - 8) * 11) / 100 : 0
+      hourly.push({ dow, hour, peakSlot, cost, realCost: cost, subCost: 0, calls: cost > 0 ? 2 : 0, tokens: 300 })
+    }
+  }
+  return {
+    ok: true, fromKey: daily[0].date, toKey: daily[daily.length - 1].date, days: daily.length,
+    range: '30d', stepDays: 30, daily, hourly,
+    byHour: Array.from({ length: 24 }, (_, hour) => ({
+      hour, peakHour: (hour >= 9 && hour < 12) || (hour >= 14 && hour < 18),
+      cost: hourly.filter((c) => c.hour === hour).reduce((s, c) => s + c.cost, 0),
+      realCost: 0, subCost: 0, calls: hour, tokens: 100,
+    })),
+    byWeekday: Array.from({ length: 7 }, (_, dow) => ({ dow, cost: 1 + dow, calls: 10, tokens: 1000 })),
+    summary: {
+      cost: 12.34, realCost: 12.34, subCost: 0, calls: 120, tokens: 36000, cacheRead: 60000, input: 24000,
+      cacheHitRate: 0.7143, peakCost: 4.94, offCost: 7.4, windowDays: 30, activeDays: 25, streak: 3,
+      avgActiveCost: 0.4936, avgDayCost: 0.4113,
+      maxDay: { date: daily[10].date, label: daily[10].label, cost: 2.22, calls: 9 },
+      maxCell: { dow: 4, hour: 15, cost: 0.77, calls: 5 },
+      last7: { days: 7, cost: 3.1, avgCost: 0.4429, calls: 28 },
+    },
+    asOf: NOW,
+  }
+}
+
+function subFixture() {
+  const byDay = []
+  for (let i = 6; i >= 0; i -= 1) {
+    const key = new Date(NOW - i * 86400000 + 28800000).toISOString().slice(0, 10)
+    byDay.push({
+      date: key, label: key.slice(5).replace('-', '/'),
+      realCost: 0.2, subCost: 0.35, realCalls: 2, subCalls: 1, realTokens: 900, subTokens: 400, cost: 0.55,
+    })
+  }
+  const items = [
+    {
+      provider: 'kimi-coding', model: 'k3-256k', key: 'kimi-coding/k3-256k', calls: 8, tokens: 12000,
+      input: 4000, output: 2000, cacheRead: 6000, cacheWrite: 0, reasoning: 0, cost: 2.0, share: 0.8,
+      estimated: true, firstDay: '2026-08-18', lastDay: byDay[6].date, activeDays: 4, devices: 2, sources: 2,
+      lastTs: NOW - 3600000, idleDays: 0, avgPerActiveDay: 0.5,
+    },
+    {
+      provider: 'kimi-coding', model: 'k3', key: 'kimi-coding/k3', calls: 2, tokens: 1000,
+      input: 400, output: 200, cacheRead: 400, cacheWrite: 0, reasoning: 0, cost: 0.5, share: 0.2,
+      estimated: true, firstDay: '2026-07-01', lastDay: '2026-08-24', activeDays: 1, devices: 1, sources: 1,
+      lastTs: NOW - 20 * 86400000, idleDays: 20, avgPerActiveDay: 0.5,
+    },
+  ]
+  return {
+    ok: true, source: 'cloud', fromKey: byDay[0].date, toKey: byDay[6].date, range: '7d',
+    totals: {
+      realCost: 1.4, subCost: 2.5, cost: 3.9, realCalls: 14, subCalls: 7, calls: 21,
+      realTokens: 6300, subTokens: 2800, tokens: 9100, subShare: 0.641, planCount: 2,
+    },
+    items,
+    byDevice: [
+      { deviceId: 'dev-1', deviceName: '台式机', source: 'dsh', provider: 'kimi-coding', model: 'k3-256k', key: 'kimi-coding/k3-256k', calls: 6, tokens: 9000, cost: 1.5, lastDay: byDay[6].date },
+      { deviceId: 'dev-2', deviceName: '笔记本', source: 'zcode', provider: 'kimi-coding', model: 'k3', key: 'kimi-coding/k3', calls: 2, tokens: 1000, cost: 0.5, lastDay: '2026-08-24' },
+    ],
+    byDay,
+    byMonth: [{ month: byDay[0].date.slice(0, 7), label: '26-09', realCost: 1.4, subCost: 2.5, realCalls: 14, subCalls: 7, subTokens: 2800, cost: 3.9 }],
+    recent: [{
+      ts: NOW - 3600000, date: byDay[6].date, device: 'dev-1', deviceName: '台式机', source: 'dsh',
+      provider: 'kimi-coding', model: 'k3-256k', sessionId: 'kimi-session-1', calls: 1, cost: 0.4, estimated: true, tokens: 3000,
+    }],
+    plans: { 'kimi-coding': { input: 6.5, output: 27, cacheRead: 1.1, cacheWrite: 1.1 } },
+    peakWindows: '周一至周五 9:00-12:00 · 14:00-18:00',
+    asOf: NOW,
+  }
 }
 
 const log = []
@@ -164,10 +256,10 @@ test('app.js: 带会话加载时 boot() 会请求 devices/overview 并渲染出�
 // ============================================================
 // 3. 导航按钮真的能点
 // ============================================================
-test('app.js: 逐个点击 7 个导航项，每个视图都要发请求且渲染出内容', async () => {
+test('app.js: 逐个点击 10 个导航项，每个视图都要发请求且渲染出内容', async () => {
   const { root } = dom
   const labels = byClass(root, 'nav-item').map((n) => n.textContent)
-  assert.equal(labels.length, 7, '应有 7 个导航项，实际：' + JSON.stringify(labels))
+  assert.equal(labels.length, 10, '应有 10 个导航项，实际：' + JSON.stringify(labels))
 
   const { state } = await import(STATE_URL)
   const problems = []
@@ -182,24 +274,29 @@ test('app.js: 逐个点击 7 个导航项，每个视图都要发请求且渲染
     if (/渲染异常/.test(text)) problems.push(labels[i] + '：' + (text.match(/界面渲染异常：[^\n]{0,80}/) || [''])[0])
     if (/加载中/.test(text)) problems.push(labels[i] + '：仍停在「加载中…」')
     if (text.length < 100) problems.push(labels[i] + '：渲染内容过少 ' + JSON.stringify(text))
+    // 接口形状漂移探针：字段缺失/类型不符时页面会渲染出这些字样
+    if (/undefined|NaN|\[object Object\]/.test(text)) problems.push(labels[i] + '：出现未定义字段 ' + (text.match(/.{0,30}(undefined|NaN|\[object Object\]).{0,30}/) || [''])[0])
   }
   assert.deepEqual(problems, [], '视图问题：\n' + problems.join('\n'))
   assert.equal(state.view, 'settings', '循环结束后应停在最后一个视图')
 
   // 视图高亮跟随
-  assert.match(byClass(root, 'nav-item')[6].className, /(^|\s)on(\s|$)/)
+  assert.match(byClass(root, 'nav-item')[9].className, /(^|\s)on(\s|$)/)
 })
 
 test('app.js: 各视图都渲染出真实数据（不是空壳）', async () => {
   const { root } = dom
-  // 顺序与 VIEWS 一致：概览 / 设备×Agent / 设备 / 趋势 / 模型 / 记录 / 设置
+  // 顺序与 VIEWS 一致：概览 / 热力图 / 趋势 / 订阅服务 / 设备×Agent / 设备 / 模型 / 记录 / 监控 / 设置
   const EXPECT = [
     [/区间按量花费/, /¥1\.73/],
+    [/日历热力图 · 花费/, /近 30 天/],
+    [/花费趋势/, /09-1[3-5]/],   // 按天粒度只显示 MM-DD（labelSlice=5）
+    [/订阅套餐明细/, /kimi-coding\/k3-256k/],
     [/设备 × Agent 矩阵/, /台式机/],
     [/设备清单（2）/, /zcode/],
-    [/花费趋势/, /09-1[3-5]/],   // 按天粒度只显示 MM-DD（labelSlice=5）
     [/模型用量与花费/, /deepseek-v4\.1-flash/],
     [/记录明细/, /ses_abcdefghij/],
+    [/设备 × Agent 同步新鲜度/, /时钟偏差|新鲜度/],
     [/服务信息/, /scrypt|单价表来源|共享引导令牌/],
   ]
   for (let i = 0; i < EXPECT.length; i += 1) {
@@ -209,6 +306,69 @@ test('app.js: 各视图都渲染出真实数据（不是空壳）', async () => 
     assert.ok(ok, '第 ' + (i + 1) + ' 个视图未渲染出预期内容：' + root.textContent.slice(0, 200))
   }
 })
+
+test('app.js: 概览的今日 / 本月 / 全部累计卡片读到切片金额（real 字段，不是 ¥0.0000）', async () => {
+  const { root } = dom
+  byClass(root, 'nav-item')[0].click() // 概览
+  assert.ok(await waitFor(() => /全部累计/.test(root.textContent)), '概览应渲染')
+  const text = root.textContent
+  assert.match(text, /今日（北京）¥0\.3300/, '今日切片应显示 0.33；实际：' + (text.match(/今日（北京）[^本]{0,20}/) || [''])[0])
+  assert.match(text, /本月（北京）¥1\.73/, '本月切片应显示 1.73')
+  assert.match(text, /全部累计¥1\.73/, '全部切片应显示 1.73')
+  assert.doesNotMatch(text, /(今日（北京）|本月（北京）|全部累计)¥0\.0000/, '切片不得退化成 0.0000（字段名读错时会这样）')
+})
+
+test('app.js: 热力图渲染出日历格与 7×24 时段格，点格子能下钻到当天记录', async () => {
+  const { root } = dom
+  byClass(root, 'nav-item')[1].click() // 热力图
+  assert.ok(await waitFor(() => /日历热力图/.test(root.textContent)), '热力图应渲染')
+
+  const cells = byClass(root, 'heat-cell').filter((n) => n.dataset && n.dataset.date)
+  assert.ok(cells.length >= 30, '日历热力图应有 ≥30 个可点击格子，实际 ' + cells.length)
+  const hg = byClass(root, 'hg-cell')
+  assert.equal(hg.length, 168, '星期×小时应有 168 格，实际 ' + hg.length)
+  assert.ok(hg.some((c) => /(^|\s)pk(\s|$)/.test(c.className)), '高峰计价时段应有 pk 标记')
+
+  // 点一个格子 → 自定义区间（from/to）→ 记录页
+  const before = log.length
+  const grid = byClass(root, 'heat-grid')[0]
+  grid.dispatch('click', { target: cells[5] })
+  const hit = await waitFor(() => log.slice(before).some((u) => /records\?.*from=/.test(u)))
+  assert.ok(hit, '点格子后应带 from/to 拉记录；新增请求：' + JSON.stringify(log.slice(before)))
+
+  const { state } = await import(STATE_URL)
+  assert.equal(state.view, 'records')
+  assert.equal(state.range, 'custom')
+})
+
+test('app.js: 订阅页把订阅与按量分开呈现', async () => {
+  const { root } = dom
+  byClass(root, 'nav-item')[3].click() // 订阅服务
+  assert.ok(await waitFor(() => /订阅等效费用/.test(root.textContent)), '订阅页应渲染')
+  const text = root.textContent
+  assert.match(text, /订阅等效费用/)
+  assert.match(text, /¥2\.50/, '订阅等效金额')
+  assert.match(text, /¥1\.40/, '按量金额')
+  assert.match(text, /64\.1%/, '订阅占比（subShare）')
+  assert.match(text, /套餐单价表/, '应展示等效费用的折算依据')
+  assert.match(text, /闲置/, '应有订阅闲置监控')
+})
+
+test('app.js: 监控页给出告警与阈值设置，并带出真实告警内容', async () => {
+  const { root } = dom
+  byClass(root, 'nav-item')[8].click() // 监控
+  assert.ok(await waitFor(() => /阈值与预算/.test(root.textContent)), '监控页应渲染')
+  const text = root.textContent
+  assert.match(text, /同步新鲜度/)
+  assert.match(text, /时钟偏差/)
+  // 样本里 kimi-coding/k3 已闲置 20 天（阈值 14）→ 必须报出来
+  assert.match(text, /订阅套餐 kimi-coding\/k3 已 20 天未使用/)
+  // 样本里台式机时钟偏差 20 分钟（阈值 300 秒）→ 必须报出来
+  assert.match(text, /时钟偏差 1200 秒/)
+  const prefs = byClass(root, 'pref')
+  assert.ok(prefs.length >= 8, '应渲染阈值输入项，实际 ' + prefs.length)
+})
+
 
 test('app.js: 顶部「刷新」按钮会重新取数', async () => {
   const { root } = dom

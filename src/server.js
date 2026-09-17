@@ -270,6 +270,10 @@ export function createServer(config, opts) {
     }
   })
   router.get('/api/admin/devices', ({ req }) => { requireAdmin(req); return readDevices() })
+  // 看板监控：热力图（日历 + 星期×小时）与订阅服务看板。
+  // 仅管理端开放 —— 插件侧只需要 overview / plugin-view 那套口径。
+  router.get('/api/admin/heatmap', ({ req, query }) => { requireAdmin(req); return Q.heatmap(db, adminParams(query)) })
+  router.get('/api/admin/subscriptions', ({ req, query }) => { requireAdmin(req); return Q.subscriptions(db, adminParams(query)) })
 
   // ---------------- 采集端只读查询（设备令牌） ----------------
   // 采集端插件手里只有设备令牌 / 共享引导令牌，拿不到管理员会话；这里给它一组**只读**聚合接口，

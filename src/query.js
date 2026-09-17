@@ -11,6 +11,7 @@
 //   · 按量（totalCost/tokens/calls）与订阅（sub*）分开统计
 // ============================================================
 import { dayKey, monthKey, dayKeyToMs, enumerateDays, resolveRange } from './time.js'
+import { PEAK_HOUR_WINDOWS, PEAK_WINDOWS, priceSnapshot } from './pricing.js'
 
 const DAY_MS = 86400000
 
@@ -461,6 +462,23 @@ export function pluginViewUnion(db, parts) {
   return acc
 }
 
+/**
+ * 「上期」对比窗口：与当前区间等长、紧邻其左的同口径切片。
+ * 看板用它在 KPI 卡上显示环比（±%）；range=all 或自定义缺边界时没有上期，返回 has=false。
+ */
+function prevTotals(db, params) {
+  const fromMs = Number(params.fromMs)
+  const toMs = Number(params.toMs)
+  const span = Number.isFinite(fromMs) && Number.isFinite(toMs) && toMs > fromMs ? toMs - fromMs : 0
+  if (!span || fromMs <= 0) return { realCost: 0, realCalls: 0, realTokens: 0, subCost: 0, has: false }
+  const w = buildWhere(Object.assign({}, params, { fromMs: fromMs - span, toMs: fromMs }))
+  const row = mapRow(db.prepare(`SELECT ${SELECT_METRICS} FROM records WHERE ${w.sql}`).get(...w.params))
+  return {
+    realCost: r4(n0(row.realCost)), realCalls: n0(row.realCalls), realTokens: n0(row.realTokens),
+    subCost: r4(n0(row.subCost)), has: true,
+  }
+}
+
 /** 概览（与插件 buildDashboard 字段对齐，便于插件三态视图直接消费） */
 export function overview(db, params) {
   const w = buildWhere(params)
@@ -471,6 +489,7 @@ export function overview(db, params) {
   const totals = totalsFiltered(db, params)
   const g = groups(db, Object.assign({}, params, { groupBy: ['device', 'source'] }))
   const dims = listDimensions(db)
+  const prev = prevTotals(db, params)
   const nameOf = new Map(dims.devices.map((d) => [d.id, d.name]))
   const devMap = new Map()
   const srcMap = new Map()
@@ -503,10 +522,13 @@ export function overview(db, params) {
     summary: {
       realCost: r4(n0(row.realCost)), realCalls: row.realCalls, realTokens: row.realTokens,
       subEquivalent: r4(n0(row.subCost)), subCalls: row.subCalls, subTokens: row.subTokens,
-      cost: r4(n0(row.cost)), calls: row.calls, tokens: row.tokens,
+      cost: r4(n0(row.cost)), calls: row.calls, tokens: row.tokens, rows: row.rows,
       peakCost: r4(n0(row.peak)), offCost: r4(n0(row.off)), flatCost: r4(n0(row.flat)),
       driftAbs: r4(n0(row.driftAbs)), estimatedRows: row.estimatedRows,
       input: row.input, output: row.output, cacheRead: row.cacheRead, cacheWrite: row.cacheWrite, reasoning: row.reasoning,
+      // 上期（等长紧邻窗口）——看板据此算环比；union 相加时这些标量会自动求和
+      prevRealCost: prev.realCost, prevRealCalls: prev.realCalls, prevRealTokens: prev.realTokens,
+      prevSubCost: prev.subCost, prevHas: prev.has ? 1 : 0,
     },
   }
 }
@@ -623,6 +645,297 @@ export function pluginView(db, params) {
     sources: overview(db, params).sources,
     asOf: Date.now(),
     range: { fromMs: params.fromMs, toMs: params.toMs },
+  }
+}
+
+/**
+ * 日轴（缺口补零）：热力图 / 订阅看板共用，保证「有数据的格子」与「筛选条件」严格一致。
+ *
+ * 窗口优先级：
+ *   1. `days=N`   —— 近 N 天（对齐到北京日边界；看板的热力图窗口选择器用它）
+ *   2. `range=all` —— 按**数据实际起点**铺轴（无下界）
+ *   3. 其余        —— 用 fromMs / toMs（adminParams 已按 range 解析）
+ *
+ * 关键：过滤条件必须用**日边界**重建（fromMs = 首日 00:00，toMs = 末日 24:00），
+ * 否则首日/末日会只统计半天，热力图格子与卡片对不上。
+ *
+ * 副作用（有意为之）：`range=30d` 这类滚动窗口会被扩展成 31 个**完整**日历天 ——
+ * 首日只覆盖了不到 24 小时，但格子仍然代表「那一整天」，否则 tooltip 上的
+ * 「某日 · ¥x · N 次」就是假的。看板自身用 `days=30/90/180/365` 或
+ * `range=month|year|all`（本身就是日历对齐的），不会踩到这个差异。
+ */
+function dayAxis(db, params, opts) {
+  const o = opts || {}
+  const maxDays = o.maxDays || 400
+  const now = Date.now()
+  const want = Number(params.days)
+  const wantDays = Number.isFinite(want) && want > 0 ? Math.min(maxDays, Math.floor(want)) : 0
+  const allTime = !wantDays && (params.range === 'all' || !Number.isFinite(Number(params.fromMs)))
+  const endKey = dayKey(wantDays ? now : (Number.isFinite(Number(params.toMs)) ? Number(params.toMs) - 1 : now))
+  let startKey
+  if (wantDays) {
+    startKey = dayKey(dayKeyToMs(endKey) - (wantDays - 1) * DAY_MS)
+  } else if (allTime) {
+    const w0 = buildWhere(Object.assign({}, params, { fromMs: null, toMs: null }))
+    const first = db.prepare(`SELECT MIN(${TS_EXPR}) AS t FROM records WHERE ${w0.sql}`).get(...w0.params)
+    startKey = dayKey(Number(first && first.t) || now)
+  } else {
+    startKey = dayKey(Number(params.fromMs))
+  }
+  let dates = enumerateDays(startKey, endKey, maxDays)
+  if (!dates.length) dates = [endKey]
+  const fromMs = dayKeyToMs(dates[0])
+  const toMs = dayKeyToMs(dates[dates.length - 1]) + DAY_MS
+  return {
+    startKey: dates[0], endKey: dates[dates.length - 1], dates, fromMs, toMs, wantDays,
+    w: buildWhere(Object.assign({}, params, { fromMs, toMs })),
+  }
+}
+
+/** 星期×小时是否落在高峰计价时段（0=周日；周末全天闲时） */
+function isPeakSlot(dow, hour) {
+  if (dow === 0 || dow === 6) return false
+  return PEAK_HOUR_WINDOWS.some((w) => hour >= w.start && hour < w.end)
+}
+
+/**
+ * 热力图：① 日历格（按天，缺口补零）② 星期×小时格（仅明细 `ts > 0`）。
+ *
+ * 为什么时段格只取明细：日汇总快照（kind='rollup'）的 ts 可能为 0，
+ * 聚合时会被回退到「当日北京正午」，全部落进 12 点格 —— 那会凭空造出一个假高峰。
+ *
+ * 返回的 daily / hourly 都是**完整铺满**的（400 天以内 / 7×24=168 格），
+ * 前端换指标、换配色都不需要重新请求。
+ */
+export function heatmap(db, params) {
+  const now = Date.now()
+  const ax = dayAxis(db, params)
+  const w = ax.w
+  const num = (r, k) => (r ? Number(r[k]) || 0 : 0)
+
+  const dailyRows = db.prepare(`SELECT day_key,
+      SUM(cost) AS cost,
+      SUM(CASE WHEN subscription = 0 THEN cost ELSE 0 END) AS real_cost,
+      SUM(CASE WHEN subscription = 1 THEN cost ELSE 0 END) AS sub_cost,
+      SUM(calls) AS calls,
+      SUM(input + output + cache_read + cache_write + reasoning) AS tokens,
+      SUM(input) AS input, SUM(output) AS output, SUM(cache_read) AS cache_read,
+      SUM(peak) AS peak, SUM(off) AS off
+    FROM records WHERE ${w.sql} GROUP BY day_key`).all(...w.params)
+  const dayMap = new Map(dailyRows.map((r) => [String(r.day_key), r]))
+  const daily = ax.dates.map((d) => {
+    const r = dayMap.get(d)
+    return {
+      date: d, label: d.slice(5).replace('-', '/'), dow: new Date(d + 'T00:00:00Z').getUTCDay(),
+      cost: r4(num(r, 'cost')), realCost: r4(num(r, 'real_cost')), subCost: r4(num(r, 'sub_cost')),
+      calls: num(r, 'calls'), tokens: num(r, 'tokens'),
+      input: num(r, 'input'), output: num(r, 'output'), cacheRead: num(r, 'cache_read'),
+      peak: r4(num(r, 'peak')), off: r4(num(r, 'off')),
+    }
+  })
+
+  const cellRows = db.prepare(`SELECT CAST(strftime('%w', ts / 1000, 'unixepoch', '+8 hours') AS INTEGER) AS dow,
+      CAST(strftime('%H', ts / 1000, 'unixepoch', '+8 hours') AS INTEGER) AS hour,
+      SUM(cost) AS cost,
+      SUM(CASE WHEN subscription = 0 THEN cost ELSE 0 END) AS real_cost,
+      SUM(CASE WHEN subscription = 1 THEN cost ELSE 0 END) AS sub_cost,
+      SUM(calls) AS calls,
+      SUM(input + output + cache_read + cache_write + reasoning) AS tokens
+    FROM records WHERE ${w.sql} AND kind = 'detail' AND ts > 0
+    GROUP BY dow, hour`).all(...w.params)
+  const cellMap = new Map(cellRows.map((r) => [Number(r.dow) + ':' + Number(r.hour), r]))
+  const hourly = []
+  for (let dow = 0; dow < 7; dow += 1) {
+    for (let hour = 0; hour < 24; hour += 1) {
+      const r = cellMap.get(dow + ':' + hour)
+      hourly.push({
+        dow, hour, peakSlot: isPeakSlot(dow, hour),
+        cost: r4(num(r, 'cost')), realCost: r4(num(r, 'real_cost')), subCost: r4(num(r, 'sub_cost')),
+        calls: num(r, 'calls'), tokens: num(r, 'tokens'),
+      })
+    }
+  }
+
+  const sumBy = (rows, k) => rows.reduce((s, x) => s + (Number(x[k]) || 0), 0)
+  const maxOf = (rows, k) => rows.reduce((a, b) => (Number(b[k]) || 0) > (Number(a[k]) || 0) ? b : a, rows[0] || {})
+  const maxDay = maxOf(daily, 'cost')
+  const maxCell = maxOf(hourly, 'cost')
+  const activeDays = daily.filter((d) => d.calls > 0 || d.cost > 0).length
+  let streak = 0
+  for (let i = daily.length - 1; i >= 0; i -= 1) { if (daily[i].calls > 0 || daily[i].cost > 0) streak += 1; else break }
+  const last7 = daily.slice(-7)
+  const cacheRead = sumBy(daily, 'cacheRead')
+  const input = sumBy(daily, 'input')
+  const cost = sumBy(daily, 'cost')
+  return {
+    ok: true,
+    source: 'cloud',
+    fromKey: ax.startKey, toKey: ax.endKey, days: daily.length,
+    range: params.range || '7d', stepDays: ax.wantDays || null,
+    daily, hourly,
+    byHour: Array.from({ length: 24 }, (_, hour) => {
+      const cells = hourly.filter((c) => c.hour === hour)
+      return {
+        hour, peakHour: isPeakSlot(1, hour),
+        cost: r4(sumBy(cells, 'cost')), realCost: r4(sumBy(cells, 'realCost')), subCost: r4(sumBy(cells, 'subCost')),
+        calls: sumBy(cells, 'calls'), tokens: sumBy(cells, 'tokens'),
+      }
+    }),
+    byWeekday: Array.from({ length: 7 }, (_, dow) => {
+      const cells = hourly.filter((c) => c.dow === dow)
+      return {
+        dow, cost: r4(sumBy(cells, 'cost')), calls: sumBy(cells, 'calls'), tokens: sumBy(cells, 'tokens'),
+      }
+    }),
+    summary: {
+      cost: r4(cost), realCost: r4(sumBy(daily, 'realCost')), subCost: r4(sumBy(daily, 'subCost')),
+      calls: sumBy(daily, 'calls'), tokens: sumBy(daily, 'tokens'),
+      cacheRead, input, cacheHitRate: input + cacheRead > 0 ? r4(cacheRead / (input + cacheRead)) : 0,
+      peakCost: r4(sumBy(daily, 'peak')), offCost: r4(sumBy(daily, 'off')),
+      windowDays: daily.length, activeDays, streak,
+      avgActiveCost: activeDays > 0 ? r4(cost / activeDays) : 0,
+      avgDayCost: daily.length > 0 ? r4(cost / daily.length) : 0,
+      maxDay: { date: maxDay.date || '', label: maxDay.label || '', cost: r4(Number(maxDay.cost) || 0), calls: Number(maxDay.calls) || 0 },
+      maxCell: { dow: Number(maxCell.dow) || 0, hour: Number(maxCell.hour) || 0, cost: r4(Number(maxCell.cost) || 0), calls: Number(maxCell.calls) || 0 },
+      last7: {
+        days: last7.length, cost: r4(sumBy(last7, 'cost')),
+        avgCost: last7.length ? r4(sumBy(last7, 'cost') / last7.length) : 0,
+        calls: sumBy(last7, 'calls'),
+      },
+    },
+    asOf: now,
+  }
+}
+
+/**
+ * 订阅服务看板：订阅（等效费用）与按量分开统计，并给出「按天 / 按月」两条时间轴。
+ *
+ * 口径要点：订阅记录的 `cost` 是**等效费用**（按套餐单价折算），不是实际扣费；
+ * 因此这里既给 `sub*`（订阅）也给 `real*`（按量），前端只做展示，不再二次计算。
+ */
+export function subscriptions(db, params) {
+  const now = Date.now()
+  const ax = dayAxis(db, params)
+  const w = ax.w
+  const num = (r, k) => (r ? Number(r[k]) || 0 : 0)
+  const subWhere = buildWhere(Object.assign({}, params, { fromMs: ax.fromMs, toMs: ax.toMs }))
+
+  const scope = mapRow(db.prepare(`SELECT ${SELECT_METRICS} FROM records WHERE ${w.sql}`).get(...w.params))
+  const itemRows = db.prepare(`SELECT provider, model,
+      SUM(calls) AS calls, SUM(input) AS input, SUM(output) AS output, SUM(cache_read) AS cache_read,
+      SUM(cache_write) AS cache_write, SUM(reasoning) AS reasoning,
+      SUM(input + output + cache_read + cache_write + reasoning) AS tokens, SUM(cost) AS cost,
+      SUM(CASE WHEN estimated = 1 THEN 1 ELSE 0 END) AS est_rows,
+      MIN(day_key) AS first_day, MAX(day_key) AS last_day, COUNT(DISTINCT day_key) AS active_days,
+      COUNT(DISTINCT device_id) AS devices, COUNT(DISTINCT source) AS sources, MAX(ts) AS last_ts
+    FROM records WHERE ${w.sql} AND subscription = 1 GROUP BY provider, model ORDER BY cost DESC`).all(...w.params)
+  const subTotal = itemRows.reduce((s, r) => s + num(r, 'cost'), 0)
+  const items = itemRows.map((r) => ({
+    provider: String(r.provider), model: String(r.model), key: String(r.provider) + '/' + String(r.model),
+    calls: num(r, 'calls'), tokens: num(r, 'tokens'),
+    input: num(r, 'input'), output: num(r, 'output'),
+    cacheRead: num(r, 'cache_read'), cacheWrite: num(r, 'cache_write'), reasoning: num(r, 'reasoning'),
+    cost: r4(num(r, 'cost')),
+    share: subTotal > 0 ? r4(num(r, 'cost') / subTotal) : 0,
+    estimated: num(r, 'est_rows') > 0,
+    firstDay: String(r.first_day || ''), lastDay: String(r.last_day || ''),
+    activeDays: num(r, 'active_days'), devices: num(r, 'devices'), sources: num(r, 'sources'),
+    lastTs: num(r, 'last_ts'),
+    idleDays: r.last_day ? Math.max(0, Math.round((dayKeyToMs(ax.endKey) - dayKeyToMs(String(r.last_day))) / DAY_MS)) : null,
+    avgPerActiveDay: num(r, 'active_days') > 0 ? r4(num(r, 'cost') / num(r, 'active_days')) : 0,
+  }))
+
+  const devRows = db.prepare(`SELECT device_id, source, provider, model, SUM(calls) AS calls,
+      SUM(input + output + cache_read + cache_write + reasoning) AS tokens, SUM(cost) AS cost, MAX(day_key) AS last_day
+    FROM records WHERE ${w.sql} AND subscription = 1
+    GROUP BY device_id, source, provider, model ORDER BY cost DESC`).all(...w.params)
+  const dims = listDimensions(db)
+  const nameOf = new Map(dims.devices.map((d) => [d.id, d.name]))
+  const byDevice = devRows.map((r) => ({
+    deviceId: String(r.device_id), deviceName: nameOf.get(String(r.device_id)) || String(r.device_id),
+    source: String(r.source), provider: String(r.provider), model: String(r.model),
+    key: String(r.provider) + '/' + String(r.model),
+    calls: num(r, 'calls'), tokens: num(r, 'tokens'), cost: r4(num(r, 'cost')), lastDay: String(r.last_day || ''),
+  }))
+
+  const dayRows = db.prepare(`SELECT day_key,
+      SUM(CASE WHEN subscription = 0 THEN cost ELSE 0 END) AS real_cost,
+      SUM(CASE WHEN subscription = 1 THEN cost ELSE 0 END) AS sub_cost,
+      SUM(CASE WHEN subscription = 0 THEN calls ELSE 0 END) AS real_calls,
+      SUM(CASE WHEN subscription = 1 THEN calls ELSE 0 END) AS sub_calls,
+      SUM(CASE WHEN subscription = 0 THEN input + output + cache_read + cache_write + reasoning ELSE 0 END) AS real_tokens,
+      SUM(CASE WHEN subscription = 1 THEN input + output + cache_read + cache_write + reasoning ELSE 0 END) AS sub_tokens
+    FROM records WHERE ${w.sql} GROUP BY day_key`).all(...w.params)
+  const dayMap = new Map(dayRows.map((r) => [String(r.day_key), r]))
+  const byDay = ax.dates.map((d) => {
+    const r = dayMap.get(d)
+    return {
+      date: d, label: d.slice(5).replace('-', '/'),
+      realCost: r4(num(r, 'real_cost')), subCost: r4(num(r, 'sub_cost')),
+      realCalls: num(r, 'real_calls'), subCalls: num(r, 'sub_calls'),
+      realTokens: num(r, 'real_tokens'), subTokens: num(r, 'sub_tokens'),
+      cost: r4(num(r, 'real_cost') + num(r, 'sub_cost')),
+    }
+  })
+
+  const startMonth = ax.startKey.slice(0, 7)
+  const endMonth = ax.endKey.slice(0, 7)
+  const monthRows = db.prepare(`SELECT month_key,
+      SUM(CASE WHEN subscription = 0 THEN cost ELSE 0 END) AS real_cost,
+      SUM(CASE WHEN subscription = 1 THEN cost ELSE 0 END) AS sub_cost,
+      SUM(CASE WHEN subscription = 0 THEN calls ELSE 0 END) AS real_calls,
+      SUM(CASE WHEN subscription = 1 THEN calls ELSE 0 END) AS sub_calls,
+      SUM(CASE WHEN subscription = 1 THEN input + output + cache_read + cache_write + reasoning ELSE 0 END) AS sub_tokens
+    FROM records WHERE ${w.sql} GROUP BY month_key`).all(...w.params)
+  const monthMap = new Map(monthRows.map((r) => [String(r.month_key), r]))
+  const months = []
+  for (let y = Number(startMonth.slice(0, 4)), m = Number(startMonth.slice(5, 7)); months.length < 60;) {
+    const key = y + '-' + (m < 10 ? '0' + m : '' + m)
+    months.push(key)
+    if (key === endMonth) break
+    m += 1; if (m > 12) { m = 1; y += 1 }
+  }
+  const byMonth = months.map((k) => {
+    const r = monthMap.get(k)
+    return {
+      month: k, label: k.slice(2),
+      realCost: r4(num(r, 'real_cost')), subCost: r4(num(r, 'sub_cost')),
+      realCalls: num(r, 'real_calls'), subCalls: num(r, 'sub_calls'), subTokens: num(r, 'sub_tokens'),
+      cost: r4(num(r, 'real_cost') + num(r, 'sub_cost')),
+    }
+  })
+
+  const recentRows = db.prepare(`SELECT device_id, source, ts, day_key, provider, model, session_id,
+      input, output, cache_read, cache_write, reasoning, calls, cost, estimated
+    FROM records WHERE ${w.sql} AND subscription = 1 ORDER BY ts DESC, id DESC LIMIT 20`).all(...w.params)
+  const recent = recentRows.map((r) => ({
+    ts: num(r, 'ts'), date: String(r.day_key),
+    device: String(r.device_id), deviceName: nameOf.get(String(r.device_id)) || String(r.device_id),
+    source: String(r.source), provider: String(r.provider), model: String(r.model),
+    sessionId: String(r.session_id || ''),
+    calls: num(r, 'calls'), cost: r4(num(r, 'cost')), estimated: Number(r.estimated) === 1,
+    tokens: num(r, 'input') + num(r, 'output') + num(r, 'cache_read') + num(r, 'cache_write') + num(r, 'reasoning'),
+  }))
+
+  const realCost = r4(n0(scope.realCost))
+  const subCost = r4(n0(scope.subCost))
+  return {
+    ok: true,
+    source: 'cloud',
+    fromKey: ax.startKey, toKey: ax.endKey,
+    range: params.range || '7d',
+    totals: {
+      realCost, subCost, cost: r4(realCost + subCost),
+      realCalls: n0(scope.realCalls), subCalls: n0(scope.subCalls), calls: n0(scope.calls),
+      realTokens: n0(scope.realTokens), subTokens: n0(scope.subTokens), tokens: n0(scope.tokens),
+      subShare: realCost + subCost > 0 ? r4(subCost / (realCost + subCost)) : 0,
+      planCount: items.length,
+    },
+    items, byDevice, byDay, byMonth, recent,
+    // 套餐单价表（等效费用就是用这张表折算的）——让看板能解释「等效费用」从哪来
+    plans: priceSnapshot(now).subscription,
+    peakWindows: PEAK_WINDOWS,
+    asOf: now,
   }
 }
 

@@ -95,7 +95,7 @@ test('静态资源：路径穿越被拒绝', async () => {
 test('部署一致性：/assets/* 服务出去的字节 == 仓库 web/ 里的当前文件', async () => {
   const { app, cleanup } = appWith(REAL_WEB)
   try {
-    for (const name of ['app.js', 'state.js', 'views.js', 'style.css']) {
+    for (const name of ['app.js', 'state.js', 'views.js', 'alerts.js', 'style.css']) {
       const disk = readFileSync(join(REAL_WEB, name))
       const r = await req(app, '/assets/' + name)
       assert.equal(r.status, 200, name + ' 应可访问')

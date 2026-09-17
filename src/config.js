@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
 
-const SERVICE_VERSION = '1.2.1'
+const SERVICE_VERSION = '1.3.0'
 const SYNC_VER = 1
 
 function bool(v, fallback) {
@@ -95,7 +95,9 @@ export function resolveConfig(env, opts) {
     syncVer: SYNC_VER,
     minSyncVer: intIn(e.MIN_SYNC_VER, 1, 99, 1),
     host: String(e.HOST || '127.0.0.1').trim(),
-    port: intIn(e.PORT, 1, 65535, 8787),
+    // PORT=0 是「让系统分配空闲端口」的通用约定：测试与临时实例靠它才能并行启动，
+    // 若把 0 当作非法值回退到 8787，多个测试实例会抢同一个端口（EADDRINUSE 随机失败）。
+    port: intIn(e.PORT, 0, 65535, 8787),
     dataDir,
     dbFile: join(dataDir, 'dsh-cost-cloud.sqlite'),
     backupDir: join(dataDir, 'backups'),

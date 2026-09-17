@@ -69,6 +69,7 @@ export function resolveRange(q, now) {
     case 'today': return { range, fromMs: dayStartMs(t), toMs: t + 1, label: '今天' }
     case '7d': return { range, fromMs: t - 7 * DAY_MS, toMs: t + 1, label: '近 7 天' }
     case '30d': return { range, fromMs: t - 30 * DAY_MS, toMs: t + 1, label: '近 30 天' }
+    case '90d': return { range, fromMs: t - 90 * DAY_MS, toMs: t + 1, label: '近 90 天' }
     case 'month': {
       const mk = monthKey(t)
       return { range, fromMs: dayKeyToMs(mk + '-01'), toMs: t + 1, label: '本月' }
