@@ -144,6 +144,17 @@ test('北京时间分桶：日/月/区间边界', () => {
   assert.equal(y.fromMs, Date.UTC(2025, 11, 31, 16, 0, 0))
   const all = resolveRange({ range: 'all' }, bjMidnight)
   assert.equal(all.fromMs, 0)
+  // 看板新增的「近 90 天」预设：必须被解析成滚动窗口，而不是落到 default（= 全部）
+  const d90 = resolveRange({ range: '90d' }, bjMidnight)
+  assert.equal(d90.range, '90d')
+  assert.equal(d90.fromMs, bjMidnight - 90 * 86400000)
+  assert.equal(d90.toMs, bjMidnight + 1)
+  assert.equal(d90.label, '近 90 天')
+  // 自定义区间（热力图点格子下钻用）优先级最高
+  const custom = resolveRange({ range: '7d', from: String(bjMidnight - 1000), to: String(bjMidnight) }, bjMidnight)
+  assert.equal(custom.range, 'custom')
+  assert.equal(custom.fromMs, bjMidnight - 1000)
+  assert.equal(custom.toMs, bjMidnight)
 })
 
 test('时间区间枚举上限（防止超长轴拖垮页面）', () => {
