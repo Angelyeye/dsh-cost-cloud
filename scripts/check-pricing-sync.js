@@ -68,7 +68,8 @@ for (const c of checks) {
 
 // 逐条计费一致性抽样：同一批记录在两边算出的费用必须相同
 // 覆盖：V4.1 Flash 调价时刻前后、V4-Pro 路由窗口内（9-14 12:00 前，仍按自有牌价）、
-//       路由之后、官方现役名与等价写法、订阅 provider。
+//       路由之后、官方现役名与等价写法、订阅 provider、
+//       以及**火山方舟 Coding Plan**（专属订阅端点 / 泛 volcengine 白名单 / 接入点按量）。
 const samples = [
   { p: 'deepseek-official', m: 'deepseek-flash', ts: Date.UTC(2026, 8, 10, 5, 0), t: { input: 3850, output: 2880, cacheRead: 43904, cacheWrite: 0, reasoning: 0 } },
   { p: 'deepseek-official', m: 'deepseek-v4.1-flash', ts: Date.UTC(2026, 8, 12, 5, 0), t: { input: 24180, output: 477, cacheRead: 1920, cacheWrite: 0, reasoning: 0 } },
@@ -76,6 +77,14 @@ const samples = [
   { p: 'deepseek-official', m: 'deepseek-v4-pro', ts: Date.UTC(2026, 8, 15, 5, 0), t: { input: 3850, output: 2880, cacheRead: 43904, cacheWrite: 0, reasoning: 0 } },
   { p: 'deepseek-official', m: 'deepseek-v4-pro', ts: Date.UTC(2026, 7, 20, 5, 0), t: { input: 1000, output: 2000, cacheRead: 500, cacheWrite: 100, reasoning: 0 } },
   { p: 'moonshot-ai', m: 'kimi-coding', ts: Date.UTC(2026, 8, 12, 5, 0), t: { input: 10000, output: 5000, cacheRead: 1000, cacheWrite: 0, reasoning: 0 } },
+  // 火山方舟：专属订阅端点（整档计订阅，含带日期后缀的模型 id）
+  { p: 'byteblus-coding-plan-cn', m: 'glm-5-3-flash-260828', ts: Date.UTC(2026, 8, 20, 5, 0), t: { input: 20000, output: 3000, cacheRead: 8000, cacheWrite: 0, reasoning: 0 } },
+  { p: 'byteblus-coding-plan-cn', m: 'doubao-seed-2-1-pro-260915', ts: Date.UTC(2026, 8, 20, 5, 0), t: { input: 20000, output: 3000, cacheRead: 8000, cacheWrite: 0, reasoning: 0 } },
+  // 泛 volcengine：白名单内 → 订阅；白名单外 / 接入点 id → 按量估算
+  { p: 'volcengine', m: 'ark-code-latest', ts: Date.UTC(2026, 8, 20, 5, 0), t: { input: 12000, output: 1500, cacheRead: 4000, cacheWrite: 0, reasoning: 0 } },
+  { p: 'volcengine', m: 'ep-20260413045435-2shmq', ts: Date.UTC(2026, 8, 20, 5, 0), t: { input: 12000, output: 1500, cacheRead: 4000, cacheWrite: 0, reasoning: 0 } },
+  // Kimi 回归：确认「整档订阅」语义未被模型白名单改造破坏
+  { p: 'kimi', m: 'kimi-k2.5', ts: Date.UTC(2026, 8, 20, 5, 0), t: { input: 12000, output: 1500, cacheRead: 4000, cacheWrite: 0, reasoning: 0 } },
 ]
 const nrm = (p) => String(p).toLowerCase().replace(/-official$/, '')
 let sampleBad = 0

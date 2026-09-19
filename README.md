@@ -143,7 +143,11 @@ curl -H "Authorization: Bearer $DSH_SYNC_TOKEN" "http://127.0.0.1:8787/api/v1/ov
 - **时间范围**：`range=today | 7d | 30d | month | year | all`，自定义区间用 `from` / `to`（epoch ms）。
   其中 `all` 在看板上叫「**全部**」，语义是 `fromMs = 0`（**无下界**）—— 它的起点就是全库最早一条记录的日期，
   概览卡片副标题上的「自 YYYY-MM-DD HH:mm 起」只是把那个日期显示出来，不是被截断。
-- **按量 vs 订阅**：分开统计；订阅显示为「等效费用」，仅供参考。
+- **按量 vs 订阅**：分开统计；订阅显示为「等效费用」，仅供参考。订阅判定用
+  **provider + 模型白名单**（与插件同源）：专属订阅端点（baseURL 指向
+  `ark.cn-beijing.volces.com/api/coding/v3` 的 provider，如 `byteblus-coding-plan-cn`）
+  整档计订阅；泛 `volcengine` 只认白名单模型（豆包 / GLM / Kimi / DeepSeek / MiniMax 系
+  与 `ark-code-*`），**接入点 id（`ep-*`）一律按量**。
 - **设备维度的排除语义**：`excludeDevice=<id>` 排除的是**整台设备**（含该机上所有 agent）；
   `excludeSource=<src>` 排除某个 agent 来源，两者可叠加，也可与 `devices=` / `sources=` 白名单混用。
   需要**并集**口径（例如「其他整机 + 本机上的其它 agent」）时用
@@ -202,6 +206,9 @@ node scripts/check-pricing-sync.js --plugin ../dsh-cost-tracker   # 校验价格
 
 测试覆盖：去重键契约向量、幂等与重放、rollup 快照与墓碑、二维矩阵自洽、
 鉴权与限流、计费口径与北京时间边界、契约错误码、双设备双 agent 端到端。
+`scripts/check-pricing-sync.js` 额外做**跨仓库同源校验**：逐字段比对
+`PRICE_ERAS` / `SUBSCRIPTION_RATES` / `PROVIDER_RATES` / `MODEL_ALIASES` 等常量、
+比对 `pricing.js` 的来源哈希，并对 11 条代表记录（含火山方舟订阅与按量两侧）逐条核对计费结果。
 
 ---
 
@@ -219,6 +226,28 @@ test/           node --test 测试
 ---
 
 ## 更新记录
+
+### v1.3.3
+
+**同步插件的火山方舟 Coding Plan 订阅支持（订阅门卫与插件保持同源）。**
+
+- **同步插件的订阅门卫改造**：`priceFor()` 原先只按 provider 名判定订阅，对该 provider 的
+  **所有模型**一律套订阅价。Kimi 下恰好成立，但火山方舟的套餐内 / 套餐外模型混在同一个
+  provider 下 —— 云端权威重算会把按量调用错算成订阅，看板「订阅服务」页随之失真。
+  现与插件同源：`provider 命中 + 模型白名单`双重限定，并区分**专属订阅端点**
+  （baseURL 指向 `/api/coding/v3`，整档计订阅）与**泛 `volcengine`**
+  （仅白名单内模型；接入点 `ep-*` 一律按量）。
+- **新增常量**（与插件 `pricing.js` 逐字节一致）：`SUBSCRIPTION_MODELS`、
+  `VOLCENGINE_PLAN_PROVIDER_KEYS`、`VOLCENGINE_PLAN_DEDICATED_PROVIDERS`、
+  `VOLCENGINE_PLAN_MODEL_PREFIXES`、`VOLCENGINE_PLAN_RATES`、`subscriptionPlanFor()`。
+  `SUBSCRIPTION_RATES` 保持 kimi 两项不变，故 **Kimi 行为逐字节不变**。
+- `PRICING_SOURCE_HASH` 同步为插件 `pricing.js` 的新哈希（`sha256:7dd678571cce195f`）。
+- **`scripts/check-pricing-sync.js` 的计费抽样从 6 条扩到 11 条**，新增火山专属订阅端点
+  （含带日期后缀的模型 id）、泛 `volcengine` 白名单命中、接入点 `ep-*` 按量、以及 Kimi 回归 ——
+  这类漂移以后会被该脚本直接拦下，不再依赖人工记忆。
+- 测试：`test/pricing-parity.test.js` 新增 3 条（专属端点整档订阅 / 泛 volcengine 白名单两侧 /
+  Kimi 回归）。看板「订阅服务」页的套餐单价表读的是 `subscriptions.plans`
+  （即 `SUBSCRIPTION_RATES`），新增的火山价位会**自动出现**，无需改前端。
 
 ### v1.3.2
 

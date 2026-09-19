@@ -17,7 +17,7 @@ export const PRICING_SOURCE = 'dsh-cost-tracker/pricing.js'
 
 /** 来源文件内容哈希（插件仓库 `dsh-cost-tracker/pricing.js` 的 sha256，前 16 位）。
  *  每次同步价格表后必须更新；`scripts/check-pricing-sync.js` 会实测比对，不一致即报错。 */
-export const PRICING_SOURCE_HASH = 'sha256:9ad34bc72da58fe2'
+export const PRICING_SOURCE_HASH = 'sha256:7dd678571cce195f'
 
 /** V4.1 Flash 价格的生效时刻：北京时间 2026-09-10 12:00（UTC+8）= 2026-09-10T04:00:00Z */
 export const V41_EFFECTIVE_AT = Date.UTC(2026, 8, 10, 4, 0, 0)
@@ -152,6 +152,142 @@ export const SUBSCRIPTION_RATES = {
   kimi: { input: 6.5, output: 27.0, cacheRead: 1.1, cacheWrite: 1.1 },
 }
 
+/**
+ * 订阅套餐的**模型白名单**：provider 键 → 该套餐覆盖的模型。
+ *
+ * 为什么必须有这层：订阅制的判定原先只看 provider 名。这对 Kimi 成立
+ * （kimi 全部走订阅），但**火山方舟不是**——同一个 provider 下既有
+ * Coding Plan 套餐内的模型（订阅，不按量扣费），也有套餐外的模型
+ * （按量计费）。只看 provider 会把按量调用错记为订阅，金额从「真实花费」
+ * 里凭空消失，且原始记录被标成 subscription 后无法自动回滚。
+ *
+ * 值为 null 表示「该 provider 全部模型都属于这个套餐」（Kimi 即如此）。
+ * 值与插件 `pricing.js` 的同名常量**保持逐字节一致**（见
+ * scripts/check-pricing-sync.js：云端价格表是插件的刻意副本）。
+ */
+export const SUBSCRIPTION_MODELS = {
+  'kimi-coding': null,
+  kimi: null,
+}
+
+/**
+ * 火山方舟（Volcengine Ark）Coding Plan 订阅套餐。
+ *
+ * provider 名由用户在 DSH 里自定，故登记多个常见别名（normalizeProvider 已
+ * 剥离 `-official` 后缀）。实测 provider 为 `byteblus-coding-plan-cn`
+ * （baseURL 指向 ark.cn-beijing.volces.com/api/coding/v3），一并纳入。
+ *
+ * 模型白名单：套餐内含多厂商模型。**同名模型在按量侧也存在**
+ * （如 doubao-seed-2.0-pro、deepseek-v4-pro），因此判定必须靠
+ * 「provider 命中 + 模型在白名单内」双重限定，缺一不可。
+ */
+const VOLC_PLAN_RATES = { input: 3.0, output: 12.0, cacheRead: 0.6, cacheWrite: 0.6 }
+
+/** 火山方舟 Coding Plan 覆盖的 provider 别名 */
+export const VOLCENGINE_PLAN_PROVIDER_KEYS = [
+  'volcengine',
+  'volcengine-coding',
+  'volcengine-plan',
+  'volcengine-coding-plan',
+  'byteblus-coding-plan-cn',
+  'byteplus-coding-plan-cn',
+]
+
+/**
+ * **专属 Coding Plan 端点**的 provider（baseURL 指向 `.../api/coding/v3`）。
+ *
+ * 与泛 `volcengine` 别名区别对待：这类 provider 本身就是订阅入口，
+ * 其可调模型全部来自套餐（套餐外模型需另配 `/api/v3` 在线推理 provider，
+ * 那属于另一个 provider 名），因此**不再逐模型限定**——这也解决了
+ * 「模型 id 带日期后缀、清单永远追不上」的问题。
+ */
+export const VOLCENGINE_PLAN_DEDICATED_PROVIDERS = [
+  'byteblus-coding-plan-cn',
+  'byteplus-coding-plan-cn',
+  'volcengine-coding',
+  'volcengine-plan',
+  'volcengine-coding-plan',
+]
+
+/** 火山方舟 Coding Plan 覆盖的具体模型（原始名，归一化后匹配） */
+const VOLCENGINE_PLAN_MODEL_IDS = [
+  'ark-code-latest',
+  // 豆包
+  'doubao-seed-code',
+  'doubao-seed-2.0-code',
+  'doubao-seed-2.0-pro',
+  'doubao-seed-2.0-lite',
+  'doubao-seed-2.1-pro',
+  // 智谱
+  'glm-4.7',
+  'glm-5.1',
+  'glm-5.3-flash',
+  // Kimi / DeepSeek / MiniMax
+  'kimi-k2.5',
+  'deepseek-v3.2',
+  'deepseek-v4-pro',
+  'deepseek-v4.1-flash',
+  'minimax-m2.5',
+]
+
+/**
+ * 整族放行的模型前缀（归一化后）。
+ *
+ * **刻意收得很窄**：只放行方舟自动调度名（`ark-code-*`，会滚动升级）。
+ * 前缀放太宽（如按 `deepseek` / `glm` 整族放行）会把该 provider 下
+ * 套餐外的按量模型一并算成订阅，金额从「真实花费」里消失——
+ * 宁可漏配（可显式补清单）也不能错配。
+ */
+export const VOLCENGINE_PLAN_MODEL_PREFIXES = ['arkcode']
+
+export const VOLCENGINE_PLAN_RATES = VOLC_PLAN_RATES
+
+/** 归一化模型名索引（惰性构建，与下方 eraIndex 同法，避免依赖声明顺序） */
+let VOLC_MODEL_INDEX = null
+function volcModelIndex() {
+  if (VOLC_MODEL_INDEX === null) {
+    VOLC_MODEL_INDEX = {}
+    for (const id of VOLCENGINE_PLAN_MODEL_IDS) VOLC_MODEL_INDEX[normalizeModelName(id)] = id
+  }
+  return VOLC_MODEL_INDEX
+}
+
+/** 归一化模型名 → 套餐单价（供展示/测试） */
+export function volcenginePlanModels() {
+  const idx = volcModelIndex()
+  const out = {}
+  for (const k of Object.keys(idx)) out[k] = VOLC_PLAN_RATES
+  return out
+}
+
+/**
+ * 解析某次调用是否命中订阅套餐（与插件同名同语义）。
+ * @param {string} np - 归一化 provider 名
+ * @param {string} model - 模型名
+ * @returns {object|null} 命中返回单价表，否则 null
+ */
+export function subscriptionPlanFor(np, model) {
+  const sub = SUBSCRIPTION_RATES[np]
+  if (sub) {
+    const allow = SUBSCRIPTION_MODELS[np]
+    // null = 该 provider 全部模型都属于订阅（Kimi：保持既有行为不变）
+    if (allow === null || allow === undefined) return sub
+    const n = normalizeModelName(model)
+    if (Array.isArray(allow) && allow.indexOf(n) >= 0) return sub
+    return null
+  }
+  // 火山方舟 Coding Plan：先看专属订阅端点的 provider（全部模型均属套餐），
+  // 再看泛 volcengine（必须靠模型白名单，因为套餐内外模型混在同一 provider 下）。
+  if (VOLCENGINE_PLAN_PROVIDER_KEYS.indexOf(np) < 0) return null
+  if (VOLCENGINE_PLAN_DEDICATED_PROVIDERS.indexOf(np) >= 0) return VOLC_PLAN_RATES
+  const n = normalizeModelName(model)
+  if (volcModelIndex()[n] !== undefined) return VOLC_PLAN_RATES
+  for (const p of VOLCENGINE_PLAN_MODEL_PREFIXES) {
+    if (n.startsWith(p)) return VOLC_PLAN_RATES
+  }
+  return null
+}
+
 /** Provider 兜底单价（估算）；缓存写入按缓存命中价计 */
 export const PROVIDER_RATES = {
   deepseek: { rates: { input: 2.0, output: 8.0, cacheRead: 0.04, cacheWrite: 0.04 }, tiered: true },
@@ -182,7 +318,8 @@ export function isPeak(ts) {
 
 /** 解析一次调用的价格信息（与插件同签名） */
 export function priceFor(np, model, ts) {
-  if (SUBSCRIPTION_RATES[np]) return { rates: SUBSCRIPTION_RATES[np], tiered: false, estimated: true, subscription: true, model, era: null }
+  const sub = subscriptionPlanFor(np, model)
+  if (sub) return { rates: sub, tiered: false, estimated: true, subscription: true, model, era: null }
   const era = eraAt(ts)
   const hit = resolveModelInEra(era, model)
   if (hit) return { rates: era.models[hit], tiered: true, estimated: false, subscription: false, model: hit, era: era.id }

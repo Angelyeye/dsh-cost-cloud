@@ -117,6 +117,44 @@ test('订阅 provider 走等效费用口径', () => {
   assert.equal(c.period, 'flat', '订阅没有峰谷分段')
 })
 
+// ---------- 火山方舟 Coding Plan（与插件同源的订阅门卫） ----------
+// 云端与插件共用同一套判定：provider 命中 + 模型白名单。两者必须给出**完全相同**的
+// subscription 结论，否则同一份上报在插件侧与云端会出现不同的口径归属
+// （云端权威重算会把订阅调用算进按量，看板「订阅服务」页随之失真）。
+test('火山方舟：专属订阅端点整档计订阅（含带日期后缀的模型 id）', () => {
+  for (const np of ['byteblus-coding-plan-cn', 'byteplus-coding-plan-cn', 'volcengine-coding', 'volcengine-plan']) {
+    for (const m of ['glm-5-3-flash-260828', 'deepseek-v4-1-flash-260910', 'doubao-seed-2-1-pro-260915']) {
+      const p = priceFor(np, m, Date.UTC(2026, 8, 20, 5, 0))
+      assert.equal(p.subscription, true, `${np}/${m} 应为订阅`)
+      assert.equal(p.tiered, false, '订阅不分峰谷')
+      assert.equal(p.estimated, true, '订阅为等效估算')
+    }
+  }
+})
+
+test('火山方舟：泛 volcengine 只认白名单，接入点一律按量', () => {
+  // 白名单内（含 ark-code 前缀整族）
+  for (const m of ['ark-code-latest', 'doubao-seed-code', 'kimi-k2.5', 'glm-5.1', 'deepseek-v4-pro', 'minimax-m2.5', 'ark-code-2027']) {
+    assert.equal(priceFor('volcengine', m, Date.UTC(2026, 8, 20, 5, 0)).subscription, true, `${m} 应为订阅`)
+  }
+  // 接入点 id / 未登记模型 → 按量（**绝不能**算成订阅，否则金额从真实花费里消失）
+  for (const m of ['ep-20260413045435-2shmq', 'some-unlisted-model']) {
+    const p = priceFor('volcengine', m, Date.UTC(2026, 8, 20, 5, 0))
+    assert.equal(p.subscription, false, `${m} 不得算成订阅`)
+    assert.equal(p.tiered, false, '按量兜底价不分峰谷')
+  }
+})
+
+test('Kimi 回归：整档订阅语义未被模型白名单改造破坏', () => {
+  for (const np of ['kimi', 'kimi-coding']) {
+    for (const m of ['kimi-k3', 'kimi-k2.5', 'whatever']) {
+      const p = priceFor(np, m, Date.UTC(2026, 8, 20, 5, 0))
+      assert.equal(p.subscription, true, `${np}/${m} 仍为订阅`)
+      assert.equal(p.rates.input, 6.5)
+    }
+  }
+})
+
 test('价格表结构完整（era / routes / 峰窗口）', () => {
   assert.equal(PRICE_ERAS.length, 3, 'legacy / v41 / v41pro 三个计费时代')
   assert.equal(V41_FLASH_MODEL, 'deepseek-flash', '规范名 = 官方现役模型名')
