@@ -98,6 +98,18 @@ test('plugin-view 返回本地同字段名形状：real/sub + byDay/byModel/byMo
     const day = b.byDay.find((d) => d.date === '2026-09-12')
     assert.ok(day, 'byDay 含 2026-09-12')
     assert.ok(Math.abs(day.cost - 2.4) < 1e-9, '当日合计 = 按量 2.0 + 订阅 0.4，实际 ' + day.cost)
+    // v1.3.2：byDay 必须带 token 类型拆分 —— 插件的「Token 用量统计」热力图在
+    // 「本机+云端 / 仅云端」下要按视图合并云端，悬停浮层还要显示输入/缓存/输出。
+    for (const k of ['input', 'output', 'cacheRead', 'cacheWrite']) {
+      assert.ok(k in day, 'byDay 必须含 ' + k + '（热力图按天明细）')
+    }
+    // 三条 seed 记录各 input 1000 / output 500 / cacheRead 2000 / cacheWrite 0
+    assert.equal(day.input, 3000, '当日输入合计')
+    assert.equal(day.output, 1500, '当日输出合计')
+    assert.equal(day.cacheRead, 6000, '当日缓存命中合计')
+    assert.equal(day.cacheWrite, 0, '当日缓存写入合计')
+    assert.equal(day.input + day.output + day.cacheRead + day.cacheWrite + (day.reasoning || 0), day.tokens,
+      '拆分项之和必须等于 tokens，否则合并后热力图总数与卡片对不上')
     assert.ok(Array.isArray(b.byModel) && b.byModel.length === 2, 'byModel 应有两个模型')
     assert.ok(Array.isArray(b.byModelDay) && b.byModelDay.length === 2, 'byModelDay 按模型展开')
     assert.ok(Array.isArray(b.recent) && b.recent.length === 3, 'recent 应含三条明细')
@@ -136,6 +148,13 @@ test('union 并集：两部分相加且不重复计数', async () => {
     assert.ok(Math.abs(r.body.all.real - 0.5) < 1e-9, '并集按量 = 0.5，实际 ' + r.body.all.real)
     assert.equal(r.body.byModel.length, 1, '并集分模型只剩 B 的模型')
     assert.equal((r.body.parts || []).length, 2, '回显并集各部分')
+    // 并集路径同样要带 token 类型拆分（「本机+云端」正是走这条路径取按天数据）
+    const uday = (r.body.byDay || []).find((d) => d.date === '2026-09-12')
+    assert.ok(uday, '并集 byDay 含 2026-09-12')
+    assert.equal(uday.input, 1000, '并集当日输入 = B 的 1000')
+    assert.equal(uday.output, 500, '并集当日输出')
+    assert.equal(uday.cacheRead, 2000, '并集当日缓存命中')
+    assert.equal(uday.tokens, 3500, '并集当日 tokens 与拆分项一致')
   } finally { await s.close() }
 })
 

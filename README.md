@@ -220,6 +220,18 @@ test/           node --test 测试
 
 ## 更新记录
 
+### v1.3.2
+
+**`plugin-view` 的按天数据补上 token 类型拆分，供插件「Token 用量统计」热力图按视图合并。**
+
+- `GET /api/v1/plugin-view` 的 `byDay` 每一项新增 `input` / `output` / `cacheRead` /
+  `cacheWrite` / `reasoning`。此前按天只有 `tokens` 总数（`byModelDay` 早就有拆分），
+  插件侧热力图要显示「输入 / 缓存 / 输出 / 费用」浮层并跨视图合并时无数据可用。
+- `plugin-view?union=...`（「本机+云端」走的正是这条路径）的并集合并同样累加这五项，
+  不会出现「只有 tokens 总数、拆分全为 0」的半截数据。
+- 拆分项之和恒等于 `tokens`（含 `reasoning`），有单测守护，避免以后改聚合时两边漂移。
+- 纯新增字段，不改任何既有字段语义：卡片、矩阵、记录页与旧版插件完全不受影响。
+
 ### v1.3.1
 
 **设置页明文回显共享引导令牌。**

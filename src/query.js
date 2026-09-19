@@ -395,9 +395,13 @@ export function pluginViewUnion(db, parts) {
     acc.month = addSliceLocal(acc.month, o.month)
     acc.all = addSliceLocal(acc.all, o.all)
     for (const d of o.byDay || []) {
-      const cur = dayMap.get(d.date) || { date: d.date, label: d.label, peak: 0, off: 0, flat: 0, calls: 0, tokens: 0, cost: 0 }
+      const cur = dayMap.get(d.date) || { date: d.date, label: d.label, peak: 0, off: 0, flat: 0, calls: 0, tokens: 0, cost: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 }
       cur.peak += d.peak || 0; cur.off += d.off || 0; cur.flat += d.flat || 0
       cur.calls += d.calls || 0; cur.tokens += d.tokens || 0; cur.cost += d.cost || 0
+      // token 类型拆分同样要跨部分累加，否则「本机+云端」的热力图只有 tokens 总数
+      cur.input += d.input || 0; cur.output += d.output || 0
+      cur.cacheRead += d.cacheRead || 0; cur.cacheWrite += d.cacheWrite || 0
+      cur.reasoning += d.reasoning || 0
       dayMap.set(d.date, cur)
     }
     for (const m of o.byModel || []) {
@@ -439,7 +443,12 @@ export function pluginViewUnion(db, parts) {
   const dates = Array.from(dayMap.keys()).sort()
   acc.byDay = dates.map((d) => {
     const x = dayMap.get(d)
-    return { date: d, label: x.label, peak: r4(x.peak), off: r4(x.off), flat: r4(x.flat), calls: x.calls, tokens: x.tokens, cost: r4(x.cost) }
+    return {
+      date: d, label: x.label, peak: r4(x.peak), off: r4(x.off), flat: r4(x.flat), calls: x.calls, tokens: x.tokens, cost: r4(x.cost),
+      // v1.3.2：并集路径也要带 token 类型拆分（「本机+云端」正是走 union 取按天数据）
+      input: x.input || 0, output: x.output || 0,
+      cacheRead: x.cacheRead || 0, cacheWrite: x.cacheWrite || 0, reasoning: x.reasoning || 0,
+    }
   })
   acc.byModel = Array.from(modelMap.values())
     .map((m) => ({ model: m.model, subscription: m.subscription, estimated: m.estimated, calls: m.calls, tokens: m.tokens, cost: r4(m.cost) }))
@@ -551,7 +560,9 @@ export function pluginView(db, params) {
   const tot = mapRow(db.prepare(`SELECT ${SELECT_METRICS} FROM records WHERE ${w.sql}`).get(...w.params))
   const dayRows = db.prepare(`SELECT day_key, SUM(CASE WHEN subscription = 0 THEN cost ELSE 0 END) AS real_cost,
       SUM(peak) AS peak, SUM(off) AS off, SUM(flat) AS flat, SUM(calls) AS calls,
-      SUM(input+output+cache_read+cache_write+reasoning) AS tokens
+      SUM(input+output+cache_read+cache_write+reasoning) AS tokens,
+      SUM(input) AS input, SUM(output) AS output, SUM(cache_read) AS cache_read,
+      SUM(cache_write) AS cache_write, SUM(reasoning) AS reasoning
       FROM records WHERE ${w.sql} GROUP BY day_key`).all(...w.params)
   const dayMap = new Map(dayRows.map((r) => [String(r.day_key), r]))
   const modelRows = db.prepare(`SELECT provider, model, subscription, SUM(calls) AS calls,
@@ -625,6 +636,14 @@ export function pluginView(db, params) {
         calls: r ? Number(r.calls) || 0 : 0,
         tokens: r ? Number(r.tokens) || 0 : 0,
         cost: r ? r4(Number(r.peak) + Number(r.off) + Number(r.flat)) : 0,
+        // v1.3.2：按天 token 类型拆分，与本地 buildUsageHeat 的按天形状对齐。
+        // 插件「Token 用量统计」热力图在「本机+云端 / 仅云端」下要按视图合并云端，
+        // 只有 tokens 总数是不够的 —— 悬停浮层要显示「输入 / 缓存 / 输出 / 费用」。
+        input: r ? Number(r.input) || 0 : 0,
+        output: r ? Number(r.output) || 0 : 0,
+        cacheRead: r ? Number(r.cache_read) || 0 : 0,
+        cacheWrite: r ? Number(r.cache_write) || 0 : 0,
+        reasoning: r ? Number(r.reasoning) || 0 : 0,
       }
     }),
     byModel, byModelDay,

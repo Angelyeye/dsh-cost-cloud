@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
 
-const SERVICE_VERSION = '1.3.1'
+const SERVICE_VERSION = '1.3.2'
 const SYNC_VER = 1
 
 function bool(v, fallback) {
