@@ -11,7 +11,24 @@
 //   · 按量（totalCost/tokens/calls）与订阅（sub*）分开统计
 // ============================================================
 import { dayKey, monthKey, dayKeyToMs, enumerateDays, resolveRange } from './time.js'
-import { PEAK_HOUR_WINDOWS, PEAK_WINDOWS, priceSnapshot } from './pricing.js'
+import { PEAK_HOUR_WINDOWS, PEAK_WINDOWS, priceSnapshot, VOLCENGINE_PLAN_PROVIDER_KEYS, VOLCENGINE_PLAN_DEDICATED_PROVIDERS, VOLCENGINE_PLAN_MODEL_PREFIXES } from './pricing.js'
+
+/**
+ * 订阅 provider → 人话标签（v1.4.1）。
+ *
+ * 采集端上报的 provider 名是用户自定的（本地实测是 `byteblus-coding-plan-cn`），
+ * 看板上只显示原始字符串时，用户根本认不出「这就是火山方舟 Coding Plan」，
+ * 于是会以为「云端没有收到火山订阅的上报」。这里给已知套餐一个中文别名。
+ */
+export function providerPlanLabel(provider) {
+  const p = String(provider || '').toLowerCase()
+  if (!p) return ''
+  if (p === 'kimi-coding' || p === 'kimi' || p.indexOf('kimi') === 0) return 'Kimi Coding Plan'
+  if (VOLCENGINE_PLAN_PROVIDER_KEYS.indexOf(p) >= 0 || /volcengine|volces|ark-?coding|byteblus|byteplus/.test(p)) {
+    return VOLCENGINE_PLAN_DEDICATED_PROVIDERS.indexOf(p) >= 0 ? '火山方舟 Coding Plan' : '火山方舟（泛 provider，按白名单判定）'
+  }
+  return ''
+}
 
 const DAY_MS = 86400000
 
@@ -851,6 +868,8 @@ export function subscriptions(db, params) {
   const subTotal = itemRows.reduce((s, r) => s + num(r, 'cost'), 0)
   const items = itemRows.map((r) => ({
     provider: String(r.provider), model: String(r.model), key: String(r.provider) + '/' + String(r.model),
+    // v1.4.1：把「这是哪家套餐」直接给出，避免用户认不出自定的 provider 别名
+    providerLabel: providerPlanLabel(r.provider),
     calls: num(r, 'calls'), tokens: num(r, 'tokens'),
     input: num(r, 'input'), output: num(r, 'output'),
     cacheRead: num(r, 'cache_read'), cacheWrite: num(r, 'cache_write'), reasoning: num(r, 'reasoning'),
@@ -873,6 +892,7 @@ export function subscriptions(db, params) {
   const byDevice = devRows.map((r) => ({
     deviceId: String(r.device_id), deviceName: nameOf.get(String(r.device_id)) || String(r.device_id),
     source: String(r.source), provider: String(r.provider), model: String(r.model),
+    providerLabel: providerPlanLabel(r.provider),
     key: String(r.provider) + '/' + String(r.model),
     calls: num(r, 'calls'), tokens: num(r, 'tokens'), cost: r4(num(r, 'cost')), lastDay: String(r.last_day || ''),
   }))
@@ -931,6 +951,7 @@ export function subscriptions(db, params) {
     ts: num(r, 'ts'), date: String(r.day_key),
     device: String(r.device_id), deviceName: nameOf.get(String(r.device_id)) || String(r.device_id),
     source: String(r.source), provider: String(r.provider), model: String(r.model),
+    providerLabel: providerPlanLabel(r.provider),
     sessionId: String(r.session_id || ''),
     calls: num(r, 'calls'), cost: r4(num(r, 'cost')), estimated: Number(r.estimated) === 1,
     tokens: num(r, 'input') + num(r, 'output') + num(r, 'cache_read') + num(r, 'cache_write') + num(r, 'reasoning'),
@@ -938,6 +959,7 @@ export function subscriptions(db, params) {
 
   const realCost = r4(n0(scope.realCost))
   const subCost = r4(n0(scope.subCost))
+  const snap = priceSnapshot(now)
   return {
     ok: true,
     source: 'cloud',
@@ -952,7 +974,9 @@ export function subscriptions(db, params) {
     },
     items, byDevice, byDay, byMonth, recent,
     // 套餐单价表（等效费用就是用这张表折算的）——让看板能解释「等效费用」从哪来
-    plans: priceSnapshot(now).subscription,
+    plans: snap.subscription,
+    // v1.4.1：完整套餐说明（Kimi + 火山方舟 Coding Plan），供看板列出「哪家套餐、什么范围」
+    subscriptionPlans: snap.subscriptionPlans || [],
     peakWindows: PEAK_WINDOWS,
     asOf: now,
   }

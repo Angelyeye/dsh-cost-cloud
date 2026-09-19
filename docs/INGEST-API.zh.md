@@ -55,7 +55,7 @@ X-Source: <source>                # 可选；载荷内 source 字段优先
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/v1/health` | 健康检查与能力协商（**无需鉴权**） |
-| GET | `/api/v1/protocol` | 机器可读契约（**无需鉴权**） |
+| GET | `/api/v1/protocol` | 机器可读契约（**无需鉴权**；另回显云端当前使用的价格版本与目录，见 3.2） |
 | POST | `/api/v1/devices/register` | 注册设备并领取令牌（需 `ALLOW_DEVICE_SELF_REGISTER=1`；否则 403） |
 | POST | `/api/v1/ingest/records` | 上报明细记录（可同时携带 rollup 快照） |
 | POST | `/api/v1/ingest/rollups` | 仅上报 rollup 快照（全量补传时用） |
@@ -84,6 +84,19 @@ X-Source: <source>                # 可选；载荷内 source 字段优先
 - 若 `syncVer` 不为 1 → 停止上报并提示用户升级服务端；
 - 若自身协议版本 < `minSyncVer` → 停止上报并提示"服务端要求升级适配器"；
 - 若 `caps.selfRegister` 为 false → 不要调用注册端点，提示用户到后台建令牌。
+
+> **云端算价口径自检（v1.4.0）**：`GET /api/v1/protocol` 除契约字段外还回显两份额外信息，
+> 供适配器判断"上报的费用与云端重算是否同源"：
+> - `pricing`：`currentEra`（当前生效的计费时代）、`eraSynced`（是否来自官方价格同步）、
+>   `syncedEras`（已同步的时代清单）、`lastCheck`（最近一次官方价核对结果与差异）；
+>   自 v1.4.1 起还带 `subscription` 与 `subscriptionPlans`（kimi / 火山方舟 Coding Plan 的
+>   等效单价与判定范围），便于解释「订阅等效费用」是怎么折出来的；
+> - `catalog`：`enabled` / `fxRate` / `match` / `fingerprint` / `providerCount` / `modelCount`
+>   —— 多厂商价格目录（USD→CNY 折算）的当前配置与数据指纹。
+>
+> 云端按记录自身时间戳算价：适配器上报的 `cost` 只是参考值，两者差值记为 `cost_drift`。
+> 若适配器与云端的价格版本不一致（例如云端刚应用了新的官方价、而适配器还是旧表），
+> 漂移会立刻变大 —— 此时先对齐价格版本，再排查真实差异。
 
 ### 3.2 `POST /api/v1/devices/register`
 

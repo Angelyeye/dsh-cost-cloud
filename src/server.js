@@ -15,6 +15,8 @@ import { openDatabase, getMeta, setMeta } from './db.js'
 import { createIngest, authenticate, parseEnvelope, validateEnvelopeShape, registerDevice, mintToken } from './ingest.js'
 import * as Q from './query.js'
 import { priceSnapshot, PRICING_SOURCE, PRICING_SOURCE_HASH } from './pricing.js'
+import { applyPricingEras, runPricingSync, pricingStatus, setPricingSyncUrl, clearPricingEras, DEFAULT_PRICING_SYNC_URL } from './pricing-eras.js'
+import { catalogInfo, setCatalogConfig } from './catalog.js'
 import { resolveRange, dayKey } from './time.js'
 import { createRouter, readJson, sendJson, sendError, HttpError, clientIp, parseCookies } from './http.js'
 import {
@@ -64,6 +66,10 @@ export function createServer(config, opts) {
   setMeta(db, 'supported_sync_ver', String(config.syncVer))
   setMeta(db, 'pricing_source', PRICING_SOURCE)
   if (!getMeta(db, 'pricing_source_hash')) setMeta(db, 'pricing_source_hash', PRICING_SOURCE_HASH)
+  // v1.4.0：把库里的「官方同步价时代」注入 pricing.js（重启后自动恢复；
+  // 未同步过时为空数组，行为与旧版完全一致）
+  const syncedEraCount = applyPricingEras(db).length
+  if (log && syncedEraCount) log('pricing: ' + syncedEraCount + ' 个官方同步时代已注入')
 
   const router = createRouter()
 
@@ -101,7 +107,19 @@ export function createServer(config, opts) {
     caps: caps(config),
   }))
 
-  router.get('/api/v1/protocol', () => protocolDoc(config))
+  router.get('/api/v1/protocol', () => {
+    // v1.4.1：除「云端用的是哪一版价」外，把订阅套餐的等效单价表也一并回显 ——
+    // 采集端与看板据此自查「订阅等效费用是怎么折出来的」，也避免用户以为
+    // 「火山订阅没有上报」（数据在，只是订阅口径不进按量卡片）。
+    const snap = priceSnapshot(Date.now())
+    return Object.assign(protocolDoc(config), {
+      pricing: Object.assign(pricingStatus(db), {
+        subscription: snap.subscription,
+        subscriptionPlans: snap.subscriptionPlans || [],
+      }),
+      catalog: catalogInfo(db),
+    })
+  })
 
   router.post('/api/v1/devices/register', ({ body }) => {
     if (!config.allowSelfRegister) {
@@ -386,6 +404,38 @@ export function createServer(config, opts) {
     }
   })
   router.get('/api/admin/prices', ({ req }) => { requireAdmin(req); return { ok: true, prices: priceSnapshot(Date.now()) } })
+
+  // ---------- 官方价格同步 + 多厂商目录（v1.4.0） ----------
+  // 云端是定价权威方：这里改的是**官方牌价表**，应用后只影响之后的算价，
+  // 历史记录口径不回改（era.since = 应用时刻）。
+  router.get('/api/admin/pricing-sync', ({ req }) => {
+    requireAdmin(req)
+    return { ok: true, pricing: pricingStatus(db), catalog: catalogInfo(db), defaultUrl: DEFAULT_PRICING_SYNC_URL }
+  })
+  router.post('/api/admin/pricing-sync', async ({ req, body }) => {
+    requireAdmin(req)
+    const b = body || {}
+    if (typeof b.url === 'string' && b.url.trim()) {
+      const set = setPricingSyncUrl(db, b.url)
+      if (!set.ok) return { ok: false, error: set.error }
+    }
+    // 抓取走系统 fetch；沙箱/离线环境可通过 fetchImpl 注入（测试用）
+    const out = await runPricingSync(db, { apply: b.apply === true, url: b.url || undefined, now: b.now })
+    audit('admin', b.apply === true ? 'pricing-apply' : 'pricing-check', JSON.stringify({ ok: out.ok, applied: out.applied, diff: out.diff, error: out.error }).slice(0, 400))
+    return Object.assign({ ok: out.ok === true }, out, { pricing: pricingStatus(db), catalog: catalogInfo(db) })
+  })
+  router.post('/api/admin/pricing-eras/clear', ({ req }) => {
+    requireAdmin(req)
+    clearPricingEras(db)
+    audit('admin', 'pricing-eras-clear', '')
+    return { ok: true, pricing: pricingStatus(db) }
+  })
+  router.post('/api/admin/catalog', ({ req, body }) => {
+    requireAdmin(req)
+    const next = setCatalogConfig(db, body || {})
+    audit('admin', 'catalog-config', JSON.stringify(body || {}).slice(0, 200))
+    return Object.assign(next, { catalog: catalogInfo(db) })
+  })
   router.get('/api/admin/audit', ({ req, query }) => {
     requireAdmin(req)
     const limit = Math.min(500, Math.max(1, Number(query.limit) || 100))

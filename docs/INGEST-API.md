@@ -55,7 +55,7 @@ X-Source: <source>            # optional; a body `source` wins
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/v1/health` | Health + capability negotiation (no auth) |
-| GET | `/api/v1/protocol` | Machine-readable contract (no auth) |
+| GET | `/api/v1/protocol` | Machine-readable contract (no auth; also reports the cloud's active price version and catalog — see 3.2) |
 | POST | `/api/v1/devices/register` | Register device, receive token (requires `ALLOW_DEVICE_SELF_REGISTER=1`, else `403`) |
 | POST | `/api/v1/ingest/records` | Ingest detail records (optionally with rollup snapshots) |
 | POST | `/api/v1/ingest/rollups` | Ingest rollup snapshots only (full re-send) |
@@ -77,6 +77,22 @@ X-Source: <source>            # optional; a body `source` wins
 }
 ```
 Adapters should: stop and ask the user to upgrade the server if `syncVer !== 1`; stop if their own version `< minSyncVer`; never call register when `caps.selfRegister` is false.
+
+> **Cloud pricing self-check (v1.4.0)**: besides the contract fields, `GET /api/v1/protocol`
+> reports two extra blocks so an adapter can tell whether its reported cost and the cloud's
+> recomputation share the same price basis:
+> - `pricing`: `currentEra` (era in effect), `eraSynced` (did it come from an official price
+>   sync), `syncedEras` (all synced eras) and `lastCheck` (last official-page check + diff);
+>   since v1.4.1 it also carries `subscription` and `subscriptionPlans` (equivalent rates and
+>   matching scope for Kimi / Volcengine Ark Coding Plan), which explain how "subscription
+>   equivalent cost" is derived;
+> - `catalog`: `enabled` / `fxRate` / `match` / `fingerprint` / `providerCount` / `modelCount`
+>   for the multi-vendor catalog (USD→CNY conversion).
+>
+> The cloud prices every record by its own timestamp, so the reported `cost` is a reference
+> value and the gap is recorded as `cost_drift`. When the two sides run different price
+> versions (e.g. the cloud just applied a new official price while the adapter still uses the
+> old table) the drift jumps immediately — align the price versions first.
 
 ### 3.2 `POST /api/v1/devices/register`
 

@@ -124,13 +124,13 @@ curl -H "Authorization: Bearer $DSH_SYNC_TOKEN" "http://127.0.0.1:8787/api/v1/ov
 | 概览 | 时间范围：今天 / 近 7 天 / 近 30 天 / 近 90 天 / 本月 / 本年 / **全部**；今日 / 本月 / 全部累计卡片（带环比）；近 30 天热力条；按 Agent、按设备的分布；口径漂移提示 |
 | **热力图** | 日历热力图（周为列、星期为行，缺口补零）+ 星期×小时热力图（高峰计价时段虚线框）；指标可切 花费 / 按量 / 订阅 / 调用 / Tokens，窗口可选 30/90/180/365 天、本年、全部；点日历格直接下钻到当天记录 |
 | 趋势 | 按天/周/月，分组维度可选 设备 / Agent / 模型 / 项目 |
-| **订阅服务** | 订阅等效费用与占比、订阅 vs 按量的按天/按月对比、套餐明细（活跃日均、闲置天数）、按设备 / Agent 分布、套餐单价表与最近订阅记录。窗口默认**全部**（订阅是按月生效的长周期账，用「近 7 天」会看到一片 ¥0.0000），可切 7/30/90 天、本月 |
+| **订阅服务** | 订阅等效费用与占比、订阅 vs 按量的按天/按月对比、套餐明细（活跃日均、闲置天数）、按设备 / Agent 分布、**按套餐分组的等效单价表**（Kimi / 火山方舟 Coding Plan，各带适用 provider 别名与判定范围）、最近订阅记录。窗口默认**全部**（订阅是按月生效的长周期账，用「近 7 天」会看到一片 ¥0.0000），可切 7/30/90 天、本月 |
 | **设备 × Agent** | 矩阵：行=设备、列=agent，单元格=花费 / tokens / 调用；行合计 = 列合计 = 总计；单元格可点击下钻到记录；附同步健康度 |
 | 设备 | 机器清单，可改名（可锁定）、禁用、轮换令牌、清空某设备数据；展开可见每台机器上各 agent 的明细 |
 | 模型 | 模型用量与花费，含历史日汇总（明细超期折叠部分） |
 | 记录 | 明细表（设备 + agent + 模型 + 会话 + tokens + 费用），筛选与 CSV 导出 |
 | **监控** | 告警列表（同步停滞 / 时钟偏差 / 非法记录 / 口径漂移 / 估算占比 / 缓存命中率 / 花费尖峰 / 月度预算 / 订阅闲置 / 版本不一致 / 云端静默 / 区间空数据）、设备同步新鲜度、近 30 天成本速率、阈值与预算设置。订阅闲置判定固定用**全时段**窗口（套餐可能上月才用过） |
-| 设置 | 服务信息、共享引导令牌、管理员口令、已接入 Agent 列表、当前单价表 |
+| 设置 | 服务信息、共享引导令牌、管理员口令、已接入 Agent 列表、**官方价格同步**（核对 / 应用 / 回退）、**多厂商模型价格目录**（开关 / 汇率 / 匹配模式）、当前单价表 |
 
 > 热力图 / 订阅服务 / 监控三页走 `GET /api/admin/heatmap` 与 `GET /api/admin/subscriptions`（**仅管理员会话**，
 > 设备令牌一律 401）。告警阈值与预算存在浏览器 `localStorage`（键 `dshc.prefs`），只影响本机这一份看板。
@@ -148,6 +148,11 @@ curl -H "Authorization: Bearer $DSH_SYNC_TOKEN" "http://127.0.0.1:8787/api/v1/ov
   `ark.cn-beijing.volces.com/api/coding/v3` 的 provider，如 `byteblus-coding-plan-cn`）
   整档计订阅；泛 `volcengine` 只认白名单模型（豆包 / GLM / Kimi / DeepSeek / MiniMax 系
   与 `ark-code-*`），**接入点 id（`ep-*`）一律按量**。
+  - 订阅记录**不会**出现在概览的「按量」金额与模型花费里（这是刻意的口径分离），
+    要看它们请到 **「订阅服务」页**：明细、按设备、按天/月、最近记录都在那里，
+    并带 `providerLabel` 人话标签（`byteblus-coding-plan-cn` → 「火山方舟 Coding Plan」）。
+  - **套餐配额百分比不上报**：配额是插件用**你自己的**方舟 AK/SK 在本地查的，云端不持有该凭据，
+    只接收 token / 花费记录；配额进度条只在插件本地面板显示。
 - **设备维度的排除语义**：`excludeDevice=<id>` 排除的是**整台设备**（含该机上所有 agent）；
   `excludeSource=<src>` 排除某个 agent 来源，两者可叠加，也可与 `devices=` / `sources=` 白名单混用。
   需要**并集**口径（例如「其他整机 + 本机上的其它 agent」）时用
@@ -159,6 +164,56 @@ curl -H "Authorization: Bearer $DSH_SYNC_TOKEN" "http://127.0.0.1:8787/api/v1/ov
   常见原因是某台设备插件版本较旧（升级后可用 `cost_recompute` 补账）。
 - **明细 vs 日汇总**：设备本地明细保留 180 天，更早折叠为永久日汇总；云端两者都收，
   通过 `absorbed` 墓碑避免重叠计数。
+
+---
+
+## 云端算价与官方价格同步（v1.4.0）
+
+云端是定价的**权威方**：上报的 `cost` 只作为参考值（用于计算口径漂移），
+入库费用由云端按自己的价格表重算。价格表有两个来源，优先顺序是
+**手动覆盖价（若配置） > 内置计费时代 / 官方同步时代 > 多厂商目录 > provider 兜底 > 通用兜底**。
+
+### 官方价格同步
+
+「设置 → 官方价格同步」抓取官方定价页（中文页直接给出人民币价）：
+解析出各模型的**峰价**（列 = 模型、行 = 指标 × 时段），构建一个**新的计费时代**写入
+DB meta（`pricing_eras`）并立即注入算价。
+
+```bash
+# 核对（只读差异，不写库）
+curl -b cookie.txt -X POST https://cost.example.com/api/admin/pricing-sync \
+  -H 'content-type: application/json' -d '{"apply": false}'
+
+# 应用新价（生效时刻 = 应用时刻，历史记录口径不回改）
+curl -b cookie.txt -X POST https://cost.example.com/api/admin/pricing-sync \
+  -H 'content-type: application/json' -d '{"apply": true}'
+
+# 回退到内置价
+curl -b cookie.txt -X POST https://cost.example.com/api/admin/pricing-eras/clear
+```
+
+解析器与插件 **逐字节同源**（`src/price-sync.js`，由 `npm run test:pricing` 校验）：
+页面改版、数字缺失、空闲价不等于高峰半价等一律**抛错**，宁可不同步也绝不写错价。
+重启后同步时代会自动从库里恢复，不需要重新抓页面。
+
+### 多厂商模型价格目录
+
+`src/vendor-catalog.js` + `src/docs/provider-pricing.json`（与插件同源，14 家厂商
+/ 90 个模型条目，USD per 1M tokens）。内置表之外的模型（OpenAI / Anthropic /
+Gemini / Qwen / Mistral / xAI …）按目录价计入，账户里记为**精确价**而不是「估算」，
+从而使云端与插件的算价口径一致、`cost_drift` 不再虚高。
+
+- 折算汇率：`catalog_fx_rate`（默认 7.2，可在设置页改；USD → CNY）
+- 匹配模式：`catalog_match` = `fuzzy`（默认，归一化包含匹配）| `exact`
+- 开关：`catalog_enabled`（默认开启）。关闭后逐字回到「只按内置表算价」的旧行为。
+
+```bash
+curl -b cookie.txt -X POST https://cost.example.com/api/admin/catalog \
+  -H 'content-type: application/json' -d '{"enabled":true,"catalogFxRate":7.2,"priceMatch":"fuzzy"}'
+```
+
+`GET /api/v1/protocol` 与 `GET /api/admin/pricing-sync` 都会回显云端当前实际使用的
+价格版本（`pricing.currentEra` / `syncedEras`）与目录指纹，便于排查两边是否同源。
 
 ---
 
@@ -205,10 +260,14 @@ node scripts/check-pricing-sync.js --plugin ../dsh-cost-tracker   # 校验价格
 ```
 
 测试覆盖：去重键契约向量、幂等与重放、rollup 快照与墓碑、二维矩阵自洽、
-鉴权与限流、计费口径与北京时间边界、契约错误码、双设备双 agent 端到端。
+鉴权与限流、计费口径与北京时间边界、契约错误码、双设备双 agent 端到端、
+官方价格同步（核对 / 应用 / 重启恢复 / 坏页面与网络失败不破坏既有时代）与
+多厂商目录算价。
 `scripts/check-pricing-sync.js` 额外做**跨仓库同源校验**：逐字段比对
 `PRICE_ERAS` / `SUBSCRIPTION_RATES` / `PROVIDER_RATES` / `MODEL_ALIASES` 等常量、
-比对 `pricing.js` 的来源哈希，并对 11 条代表记录（含火山方舟订阅与按量两侧）逐条核对计费结果。
+比对 `pricing.js` 的来源哈希、校验 **`price-sync.js` / `vendor-catalog.js` /
+`docs/provider-pricing.json` 与插件逐字节一致**，并对 11 条代表记录
+（含火山方舟订阅与按量两侧）逐条核对计费结果。
 
 ---
 
@@ -216,6 +275,10 @@ node scripts/check-pricing-sync.js --plugin ../dsh-cost-tracker   # 校验价格
 
 ```
 src/            服务端（config / http / db / auth / ingest / query / pricing / time）
+src/pricing-eras.js   官方价格同步（DB meta 持久化 + 注入算价）
+src/catalog.js        多厂商目录封套（汇率 / 匹配模式 / 开关）
+src/vendor-catalog.js 多厂商目录（与插件同源，逐字节一致）
+src/price-sync.js     官方定价页解析器（与插件同源，逐字节一致）
 src/schema/     SQLite 迁移（PRAGMA user_version 驱动）
 web/            看板（原生 ES 模块，无构建）
 docs/           INGEST-API 契约（中/英）与示例
@@ -226,6 +289,42 @@ test/           node --test 测试
 ---
 
 ## 更新记录
+
+### v1.4.1
+
+**订阅套餐「看得见数据、看不见套餐」修复：火山方舟 Coding Plan 说明补齐**
+
+- 现场：本地 provider 名是自定的 `byteblus-coding-plan-cn`（BytePlus Coding Plan CN），云端其实
+  **一直有**这批记录（与本地逐分一致），但概览的「按量」不含订阅、订阅页套餐表又只列 kimi，
+  于是看起来像「云端没收到火山订阅的上报」。
+- 现在：`priceSnapshot()` 暴露 `subscriptionPlans`（kimi + 火山方舟 Coding Plan，含适用 provider
+  别名、白名单模型、等效单价与判定范围）；`subscriptions` 及订阅明细 / 按设备 / 最近记录带
+  `providerLabel` 人话标签；订阅页套餐表改为按套餐分组；`/api/v1/protocol` 一并回显，采集端可自查。
+- 提醒：**配额百分比不上报**（云端不持有方舟凭据，也不该持有）—— 配额进度条只在插件本地面板。
+- 云端共 **135 项**测试全通过（新增 1 条「火山订阅可见性」回归）。
+
+### v1.4.0
+
+**官方价格同步 + 多厂商价格目录：云端算价口径与插件对齐（配套插件 v1.9.0）。**
+
+- 新增 `src/price-sync.js`（**与插件逐字节同源**）与 `src/pricing-eras.js`：
+  设置页「官方价格同步」可**核对**官方定价页的价差，并**应用**为新计费时代
+  （写 `pricing_eras` meta 并立即注入算价）。应用时刻 = 生效时刻，历史口径不回改；
+  重启后自动恢复。解析器对页面改版 / 数字不齐 / 空闲价非半价一律抛错，绝不写错价。
+- 新增 `src/vendor-catalog.js` + `src/catalog.js` + `src/docs/provider-pricing.json`
+  （与插件同源的 14 家厂商 / 90 个条目）：内置表之外的模型按目录价计入**精确价**
+  （而非兜底估算），云端与插件的 `cost_drift` 不再因目录缺席而长期虚高。
+  汇率（`catalog_fx_rate`，默认 7.2）、匹配模式（`catalog_match`）、开关
+  （`catalog_enabled`，默认开）均可看板配置；关闭后逐字回到旧行为。
+- 新增管理端点 `GET/POST /api/admin/pricing-sync`、`POST /api/admin/pricing-eras/clear`、
+  `POST /api/admin/catalog`；`/api/v1/protocol` 回显 `pricing`（当前时代 / 已同步时代）
+  与 `catalog`（指纹 / 汇率 / 匹配模式），采集端可自查两边同源。
+- 看板「设置」页新增两块面板，「当前单价表」改为显示**当前生效时代**（此前固定显示
+  内置表的最后一版，同步价生效后看不到变化）。
+- 测试：新增 `test/pricing-sync.test.js`（5 条：核对 / 应用 / 重启恢复 / 历史不回改 /
+  坏页面与网络失败不破坏既有时代 / 目录参与算价 / 管理端鉴权 / 入库 basis 口径），
+  `test/web-app.test.js` 增加设置页面板断言；`scripts/check-pricing-sync.js` 增加
+  `price-sync.js`、`vendor-catalog.js`、`provider-pricing.json` 的逐字节同源校验。
 
 ### v1.3.3
 

@@ -55,6 +55,29 @@ cmp('MODEL_ALIASES', cloud.MODEL_ALIASES, plugin.MODEL_ALIASES)
   })
 }
 
+// v1.9.0：vendor-catalog.js（多厂商价格目录）同样要求逐字节一致（含目录数据
+// docs/provider-pricing.json），云端目录指纹才能与插件侧对得上。
+{
+  const catOk = (rel) => existsSync(join(pluginDir, rel))
+  if (!catOk('vendor-catalog.js')) {
+    checks.push({ name: 'vendor-catalog.js', ok: false, cloud: '存在', plugin: '缺失（插件仓库需 ≥1.9.0）' })
+  } else {
+    const h = (p, rel) => createHash('sha256').update(readFileSync(join(p, rel))).digest('hex')
+    checks.push({ name: 'vendor-catalog.js 逐字节一致', ok: h(process.cwd(), 'src/vendor-catalog.js') === h(pluginDir, 'vendor-catalog.js'), cloud: 'src/vendor-catalog.js', plugin: 'vendor-catalog.js' })
+    checks.push({ name: 'provider-pricing.json 逐字节一致', ok: h(process.cwd(), 'src/docs/provider-pricing.json') === h(pluginDir, 'docs/provider-pricing.json'), cloud: 'src/docs/provider-pricing.json', plugin: 'docs/provider-pricing.json' })
+    const { catalogFingerprint: cloudFp } = await import(pathToFileURL(join(process.cwd(), 'src', 'vendor-catalog.js')).href)
+    checks.push({ name: '目录指纹可解析', ok: /^sha256:[0-9a-f]{16}$/.test(cloudFp()), cloud: cloudFp(), plugin: '' })
+  }
+  // v1.9.0：price-sync.js（官方定价页解析器）两边共用同一份实现 ——
+  // 解析逻辑一旦分叉，插件与云端会从同一个页面读出不同的价。
+  if (!catOk('price-sync.js')) {
+    checks.push({ name: 'price-sync.js', ok: false, cloud: '存在', plugin: '缺失（插件仓库需 ≥1.9.0）' })
+  } else {
+    const h = (p, rel) => createHash('sha256').update(readFileSync(join(p, rel))).digest('hex')
+    checks.push({ name: 'price-sync.js 逐字节一致', ok: h(process.cwd(), 'src/price-sync.js') === h(pluginDir, 'price-sync.js'), cloud: 'src/price-sync.js', plugin: 'price-sync.js' })
+  }
+}
+
 let bad = 0
 for (const c of checks) {
   if (c.ok) console.log('✓ ' + c.name + ' 一致')

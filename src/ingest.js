@@ -12,6 +12,7 @@
 // ============================================================
 import { dayKey, monthKey } from './time.js'
 import { computeCostAt, normalizeProvider } from './pricing.js'
+import { catalogOpts } from './catalog.js'
 import { SOURCE_RE, META_MAX_BYTES, toInt, toStr, normTokens, dedupKeyOfDetail, dedupKeyOfRollup } from './dedup.js'
 import { HttpError } from './http.js'
 import { bearerOf, createDeviceToken, hashToken, timingSafeEqStr } from './auth.js'
@@ -302,6 +303,10 @@ export function createIngest({ db, config, log }) {
     let maxSeq = env.maxClientSeqHint || 0
     let batchCost = 0, batchReported = 0, reportedRows = 0
 
+    // v1.4.0：目录计价参数整批算一次（默认开启；关掉时为 undefined，
+    // computeCostAt 走原内置表路径，行为与旧版逐字一致）
+    const catOpts = catalogOpts(db)
+
     tx(db, () => {
       env.deviceId = ensureDeviceSource(env, auth, now) ? env.deviceId : env.deviceId
 
@@ -310,7 +315,7 @@ export function createIngest({ db, config, log }) {
       const priorTomb = db.prepare(`SELECT 1 AS x FROM tombstones WHERE device_id = ? AND source = ? AND agent_instance = ? AND dedup_key = ?`)
       for (const d of details) {
         const dk = dedupKeyOfDetail(d, { resetEpoch: env.resetEpoch })
-        const calc = computeCostAt(d.provider, d.model, d.ts, d.tokens)
+        const calc = computeCostAt(d.provider, d.model, d.ts, d.tokens, catOpts)
         const picked = resolveCost('detail', d.deviceCost, calc.cost, d.subscription || calc.subscription, d.estimated || calc.estimated)
         const seg = calc.period === 'peak' ? 'peak' : calc.period === 'off-peak' ? 'off' : 'flat'
         const res = insRec.run(

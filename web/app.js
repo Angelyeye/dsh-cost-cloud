@@ -489,6 +489,9 @@ function viewSubscriptions() {
   const items = sub.items || []
   const idle = items.filter((x) => x.idleDays !== null && Number(x.idleDays) > Number(state.prefs.subIdleDays || 14))
   const plans = Object.keys(sub.plans || {})
+  // v1.4.1：后端给的完整套餐说明（Kimi + 火山方舟 Coding Plan）；旧服务端没有该字段时
+  // 自动回落到原来的 plans 表，看板不会因服务端版本差异而空白。
+  const planGroups = Array.isArray(sub.subscriptionPlans) ? sub.subscriptionPlans : []
 
   wrap.appendChild(cards([
     {
@@ -530,7 +533,8 @@ function viewSubscriptions() {
     items.length ? table([
       { key: 'key', label: '套餐 / 模型', render: (r) => el('div', {}, [
         el('div', { class: 'mono' }, r.key),
-        el('div', { class: 'dim', style: { fontSize: '11px' } }, r.provider + ' · ' + (r.estimated ? '等效单价（估算）' : '精确单价')),
+        el('div', { class: 'dim', style: { fontSize: '11px' } },
+          (r.providerLabel ? r.providerLabel + ' · ' : '') + r.provider + ' · ' + (r.estimated ? '等效单价（估算）' : '精确单价')),
       ]) },
       { key: 'cost', label: '等效费用', num: true, render: (r) => '¥' + fmtMoney(r.cost) },
       { key: 'share', label: '订阅占比', num: true, render: (r) => fmtPct(r.share) },
@@ -571,13 +575,29 @@ function viewSubscriptions() {
   ]))
 
   wrap.appendChild(el('div', { class: 'grid-2' }, [
+    // v1.4.1：套餐单价表改为「按套餐分组」——此前只列 kimi，火山订阅记录在页上却看不到
+    // 对应套餐的等效单价说明，用户会以为「云端没收到火山订阅的上报」。
     panel('套餐单价表（等效费用口径）', el('span', { class: 'hint' }, 'CNY / 1M tokens'),
-      plans.length ? table([
-        { key: 'plan', label: '套餐' },
-        { key: 'input', label: '输入（未命中）', num: true },
-        { key: 'cacheRead', label: '缓存命中', num: true },
-        { key: 'output', label: '输出', num: true },
-      ], plans.map((k) => Object.assign({ plan: k }, sub.plans[k]))) : el('div', { class: 'hint' }, '服务端未配置订阅单价')),
+      planGroups.length
+        ? el('div', {}, planGroups.map((g) => el('div', { style: { marginBottom: '10px' } }, [
+          el('div', { class: 'row', style: { gap: '6px', flexWrap: 'wrap' } }, [
+            el('b', {}, g.label),
+            g.scope ? el('span', { class: 'hint' }, g.scope) : null,
+          ]),
+          el('div', { class: 'dim', style: { fontSize: '11px', margin: '2px 0 4px' } },
+            '适用 provider：' + ((g.providers || []).join(' / ') || '—') + ((g.models || []).length ? '（白名单模型 ' + g.models.length + ' 个）' : '')),
+          table([
+            { key: 'input', label: '输入（未命中）', num: true },
+            { key: 'cacheRead', label: '缓存命中', num: true },
+            { key: 'output', label: '输出', num: true },
+          ], [g.rates || {}]),
+        ])))
+        : (plans.length ? table([
+          { key: 'plan', label: '套餐' },
+          { key: 'input', label: '输入（未命中）', num: true },
+          { key: 'cacheRead', label: '缓存命中', num: true },
+          { key: 'output', label: '输出', num: true },
+        ], plans.map((k) => Object.assign({ plan: k }, sub.plans[k]))) : el('div', { class: 'hint' }, '服务端未配置订阅单价'))),
     panel('最近订阅记录', el('span', { class: 'hint' }, '按时间倒序，最多 20 条'),
       sub.recent.length ? table([
         { key: 'ts', label: '时间（北京）', render: (r) => fmtTime(r.ts || Date.parse(r.date + 'T12:00:00+08:00')) },
@@ -976,6 +996,10 @@ function viewSettings() {
   ]))
 
   if (p) {
+    // 当前生效时代可能是「官方同步时代」（内置表之外），两者合并后再选中，
+    // 否则面板会一直显示内置表的最后一版 —— 同步完却看不出生效了。
+    const allEras = (p.eras || []).concat(p.syncedEras || [])
+    const cur = allEras.find((e) => e.id === p.currentEra) || (p.eras || [])[p.eras.length - 1]
     wrap.appendChild(panel('当前单价表（云端重算口径）',
       el('span', { class: 'hint' }, p.currentEra + ' · ' + p.eraLabel + ' · 峰时段 ' + p.peakWindows + ' · 闲时 ×' + p.offPeakFactor),
       table([
@@ -983,9 +1007,104 @@ function viewSettings() {
         { key: 'input', label: '输入（未命中）', num: true },
         { key: 'cacheRead', label: '缓存命中', num: true },
         { key: 'output', label: '输出', num: true },
-      ], Object.keys(p.eras[p.eras.length - 1].models).map((k) => Object.assign({ model: k }, p.eras[p.eras.length - 1].models[k])))))
+      ], cur ? Object.keys(cur.models).map((k) => Object.assign({ model: k }, cur.models[k])) : [])))
   }
+  wrap.appendChild(pricingSyncPanels())
   return wrap
+}
+
+/**
+ * 官方价格同步 + 多厂商价格目录（v1.4.0）。
+ *
+ * 云端是定价权威方：这里的按钮改的是**官方牌价表**（写入 pricing_eras meta 并
+ * 立即注入算价），只影响之后入库/重算的记录；历史记录按各自时间戳选版，口径不回改。
+ * 因此界面刻意把「核对（只读差异）」与「应用」分成两个按钮。
+ */
+function pricingSyncPanels() {
+  const ps = data.pricingSync
+  if (!ps) return el('div', { class: 'hint' }, '定价同步状态加载中…')
+  const pricing = ps.pricing || {}
+  const cat = ps.catalog || {}
+  const last = pricing.lastCheck
+  const urlInput = el('input', { class: 'input', style: { width: '420px' }, value: pricing.url || ps.defaultUrl || '' })
+  const status = el('span', { class: 'hint' })
+  const fxInput = el('input', { class: 'input', type: 'number', step: '0.1', style: { width: '90px' }, value: String(cat.fxRate == null ? 7.2 : cat.fxRate) })
+  const matchSel = el('select', { class: 'input' }, [
+    el('option', { value: 'fuzzy', selected: cat.match !== 'exact' ? 'true' : null }, '宽松（归一化包含匹配）'),
+    el('option', { value: 'exact', selected: cat.match === 'exact' ? 'true' : null }, '严格（名称全等）'),
+  ])
+  const enabledBox = el('input', { type: 'checkbox', checked: cat.enabled !== false ? 'true' : null })
+
+  async function run(apply) {
+    status.textContent = apply ? '抓取并应用中…' : '核对中…'
+    try {
+      const out = await post('pricing-sync', { apply: !!apply, url: urlInput.value.trim() || undefined })
+      status.textContent = !out.ok
+        ? ('失败：' + (out.error || '未知错误'))
+        : (out.applied ? ('已应用新价：' + (out.era || '')) : (out.diff ? ('发现差异：' + out.diff) : '与当前生效价一致'))
+      await loadView('settings', { silent: true })
+      render()
+    } catch (e) { status.textContent = '失败：' + e.message }
+  }
+  async function saveCatalog() {
+    status.textContent = '保存目录设置…'
+    try {
+      await post('catalog', { enabled: !!enabledBox.checked, catalogFxRate: Number(fxInput.value), priceMatch: matchSel.value })
+      status.textContent = '目录设置已保存（影响之后入库/重算的算价）'
+      await loadView('settings', { silent: true })
+      render()
+    } catch (e) { status.textContent = '保存失败：' + e.message }
+  }
+  async function clearEras() {
+    status.textContent = '清空同步价…'
+    try {
+      await post('pricing-eras/clear', {})
+      status.textContent = '已回退到内置价格表'
+      await loadView('settings', { silent: true })
+      render()
+    } catch (e) { status.textContent = '清空失败：' + e.message }
+  }
+
+  const syncPanel = panel('官方价格同步（云端重算口径的价目表）',
+    el('span', { class: 'hint' }, '抓取官方定价页 → 解析峰价 → 构建新计费时代'),
+    [
+      el('div', { class: 'kv', style: { marginTop: '8px' } }, [
+        el('span', { class: 'k' }, '当前生效时代'), el('span', { class: 'mono' }, (pricing.currentEra || '—') + (pricing.eraSynced ? '（官方同步价）' : '（内置价）')),
+        el('span', { class: 'k' }, '已同步时代'), el('span', {}, (pricing.syncedEras || []).length ? (pricing.syncedEras.map((e) => e.id).join('、')) : '无（使用内置价格表）'),
+        el('span', { class: 'k' }, '上次核对'), el('span', {}, last
+          ? (fmtAgo(last.at) + ' · ' + (last.ok ? (last.diff ? ('差异：' + last.diff) : '与当时生效价一致') : ('失败：' + (last.error || '未知错误'))) + (last.applied ? ' · 已应用' : ''))
+          : '从未核对'),
+      ]),
+      el('div', { style: { marginTop: '10px' } }, [el('div', { class: 'hint' }, '定价页地址（https）：'), urlInput]),
+      el('div', { style: { marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' } }, [
+        el('button', { class: 'btn', onClick: () => run(false) }, '核对官方价'),
+        el('button', { class: 'btn primary', onClick: () => run(true) }, '应用新价'),
+        el('button', { class: 'btn', onClick: clearEras }, '回退到内置价'),
+        status,
+      ]),
+      el('div', { class: 'hint', style: { marginTop: '6px' } },
+        '应用后只影响「应用时刻之后」的算价：历史记录按各自时间戳选版，口径不回改。核对只读差异、不写库。'),
+    ])
+
+  const catPanel = panel('多厂商模型价格目录',
+    el('span', { class: 'hint' }, '内置表之外的模型（OpenAI / Anthropic / Gemini / Qwen 等）按目录价计入「精确价」'),
+    [
+      el('div', { class: 'kv', style: { marginTop: '8px' } }, [
+        el('span', { class: 'k' }, '条目录入'), el('span', {}, (cat.modelCount || 0) + ' 个模型 · ' + (cat.providerCount || 0) + ' 家厂商'),
+        el('span', { class: 'k' }, '数据版本'), el('span', { class: 'mono' }, ((cat.meta && cat.meta.generatedAt) || '—') + ' · ' + (cat.fingerprint || '—')),
+        el('span', { class: 'k' }, '厂商'), el('span', { class: 'dim', style: { fontSize: '11px' } }, (cat.providers || []).map((x) => x.id + '(' + x.count + ')').join(' · ')),
+      ]),
+      el('div', { style: { marginTop: '10px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' } }, [
+        el('label', { class: 'hint' }, [enabledBox, ' 参与云端算价']),
+        el('span', { class: 'hint' }, 'USD→CNY 汇率'), fxInput,
+        el('span', { class: 'hint' }, '匹配模式'), matchSel,
+        el('button', { class: 'btn', onClick: saveCatalog }, '保存目录设置'),
+      ]),
+      el('div', { class: 'hint', style: { marginTop: '6px' } },
+        '目录价以美元标注，按上面的汇率折算成人民币入账；命中目录的记录记为「精确价」，与插件侧口径一致。关闭后云端退回内置表 + 兜底估值。'),
+    ])
+
+  return el('div', {}, [syncPanel, catPanel])
 }
 
 function aggregateSources(sources) {
@@ -1061,6 +1180,9 @@ async function loadView(view, opts) {
         data.config = await api('config')
         data.health = await api('health')
         data.prices = await api('prices')
+        // v1.4.0：官方价格同步 + 多厂商目录状态（上次核对差异 / 已同步时代 / 目录指纹）
+        // 单独 try：这条接口失败（旧服务端 / 网络抖动）不得把整个设置页拖成「加载中…」
+        try { data.pricingSync = await api('pricing-sync') } catch (e) { data.pricingSync = null }
         await refreshDimensions()
         break
       default: break

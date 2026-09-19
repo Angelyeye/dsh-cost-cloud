@@ -36,6 +36,22 @@ const FIXTURES = {
       eras: [{ id: 'v41', label: 'V4.1', models: { 'deepseek-v4.1-flash': { input: 1, cacheRead: 0.1, output: 2 } } }],
     },
   },
+  // v1.4.0：官方价格同步 + 多厂商目录（设置页两块新面板的数据源）
+  'pricing-sync': {
+    ok: true,
+    defaultUrl: 'https://api-docs.deepseek.com/zh-cn/quick_start/pricing',
+    pricing: {
+      url: 'https://api-docs.deepseek.com/zh-cn/quick_start/pricing',
+      currentEra: 'v41', eraLabel: 'V4.1（内置价）', eraSynced: false,
+      lastCheck: { at: NOW - 3600000, ok: true, diff: 'deepseek-flash.input: 2 → 1.5', applied: false },
+      syncedEras: [],
+    },
+    catalog: {
+      enabled: true, fxRate: 7.2, match: 'fuzzy', fingerprint: 'sha256:abcdef0123456789',
+      providerCount: 14, modelCount: 90, meta: { generatedAt: '2026-08-18' },
+      providers: [{ id: 'openai', count: 23 }, { id: 'anthropic', count: 10 }],
+    },
+  },
   devices: {
     ok: true,
     devices: [
@@ -316,6 +332,24 @@ test('app.js: 设置页明文回显共享引导令牌（不再只说「已设置
   assert.match(text, /共享引导令牌dshc_fixture_shared_bootstrap_token_01/,
     '设置页必须明文显示共享引导令牌；实际：' + (text.match(/共享引导令牌.{0,40}/) || [''])[0])
   assert.doesNotMatch(text, /共享引导令牌未设置/, '已配置令牌时不得再显示「未设置」')
+})
+
+test('app.js: 设置页给出官方价格同步与多厂商目录面板（云端定价权威方的操作入口）', async () => {
+  const { root } = dom
+  byClass(root, 'nav-item')[9].click() // 设置
+  assert.ok(await waitFor(() => /官方价格同步/.test(root.textContent)), '应渲染「官方价格同步」面板')
+  const text = root.textContent
+  // 核对差异要能看到（上次核对的结果直接写在面板上）
+  assert.match(text, /deepseek-flash\.input: 2 → 1\.5/, '应显示上次核对出的价差；实际：' + text.slice(0, 400))
+  assert.match(text, /当前生效时代v41/)
+  assert.match(text, /多厂商模型价格目录/, '应有目录面板')
+  assert.match(text, /14 个模型 · 14|90 个模型 · 14/, '目录面板应给出条目与厂商数；实际：' + (text.match(/条目录入.{0,40}/) || [''])[0])
+  assert.match(text, /USD→CNY 汇率/)
+  // 两个按钮必须在（核对只读、应用才写库）
+  const labels = byClass(root, 'btn').map((b) => b.textContent)
+  assert.ok(labels.includes('核对官方价'), '应有「核对官方价」按钮：' + JSON.stringify(labels))
+  assert.ok(labels.includes('应用新价'), '应有「应用新价」按钮')
+  assert.ok(labels.includes('保存目录设置'), '应有「保存目录设置」按钮')
 })
 
 test('app.js: 概览的今日 / 本月 / 全部累计卡片读到切片金额（real 字段，不是 ¥0.0000）', async () => {

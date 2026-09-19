@@ -238,7 +238,6 @@ test('subscriptions: 订阅与按量分开统计，恒等式与占比自洽', as
     // 等效费用的折算依据（套餐单价表）必须一并下发
     assert.ok(s.plans['kimi-coding'], '订阅单价表应包含 kimi-coding')
     assert.equal(s.plans['kimi-coding'].input, 6.5)
-
     // 按天轴：订阅与按量两条序列都对得上
     const day3 = s.byDay.find((d) => d.date === bjParts(seedInfo.T2).day)
     assert.equal(day3.subCost, 1.5)
@@ -300,10 +299,65 @@ test('overview: 上期（环比）切片取等长紧邻窗口', async () => {
 })
 
 // ============================================================
-// 4. 管理端专属：设备令牌不得读新接口
+// 5. 火山方舟 Coding Plan 在看板上的可见性（v1.4.1 回归）
 // ============================================================
-test('heatmap/subscriptions: 仅供管理端（设备令牌 401，未登录 401）', async () => {
+// 真实现场：用户本地 provider 名是自定的 `byteblus-coding-plan-cn`，云端**确实收到了**
+// 183 条订阅记录，但看板「订阅服务」页的套餐单价表只列了 kimi —— 既看不到火山套餐的
+// 等效单价说明，provider 又只显示原始字符串，于是用户以为「云端没有火山订阅的上报」。
+// 这组断言守住三件事：① 订阅 payload 带完整套餐说明；② 火山记录带人话标签；
+// ③ priceSnapshot 暴露火山的等效单价表。
+test('subscriptions: 火山方舟 Coding Plan 必须可见（套餐说明 + provider 别名 + 单价表）', async () => {
   const h = await boot()
+  try {
+    const token = addDevice(h.app, 'machine-volc', '火山测试机')
+    const bytedance = h.app.ingest.registerDevice({ deviceId: 'machine-volc', deviceName: '火山测试机', source: 'dsh' }).token
+    const T = atBj(1, 14, 0)
+    // 专属 Coding 端点（整档订阅）: provider 由用户自定，云端不得靠名字猜，只能靠上报的 subscription 标记
+    ingestDirect(h.app, {
+      token: bytedance, deviceId: 'machine-volc', source: 'dsh',
+      records: [
+        rec({ ts: T, provider: 'byteblus-coding-plan-cn', model: 'glm-5-3-flash-260828', subscription: true, cost: 0.5, tokens: { input: 100000, output: 5000, cacheRead: 0, cacheWrite: 0, reasoning: 0 } }),
+        rec({ ts: T + 60000, provider: 'byteblus-coding-plan-cn', model: 'deepseek-v4-1-flash-260910', subscription: true, cost: 0.25, tokens: { input: 50000, output: 2000, cacheRead: 0, cacheWrite: 0, reasoning: 0 } }),
+      ],
+    })
+    void token
+    const cookie = await adminCookie(h.url)
+    const s = (await adminGet(h.url, cookie, 'subscriptions?range=30d')).body
+
+    // ① 订阅记录确实进来了，并且与按量分开
+    assert.equal(s.totals.subCalls, 2, '两条火山订阅记录应计入订阅调用')
+    assert.equal(s.totals.subCost, 0.75)
+    assert.equal(s.totals.realCalls, 0)
+    const volc = s.items.filter((x) => x.provider === 'byteblus-coding-plan-cn')
+    assert.equal(volc.length, 2, '两个火山模型都应在订阅明细里')
+    // ② provider 别名 → 人话（用户认得出这是火山方舟）
+    assert.match(String(volc[0].providerLabel), /火山方舟/, '订阅明细要带人话套餐名：' + JSON.stringify(volc[0].providerLabel))
+    assert.ok(s.byDevice.every((x) => /火山方舟/.test(String(x.providerLabel))), '按设备维度同样要带标签')
+    assert.ok(s.recent.every((x) => /火山方舟/.test(String(x.providerLabel))), '最近订阅记录同样要带标签')
+
+    // ③ 套餐单价表：kimi 与火山都在，火山带 provider 别名与白名单模型数
+    assert.ok(Array.isArray(s.subscriptionPlans) && s.subscriptionPlans.length >= 2, '应下发完整套餐说明')
+    const kimiPlan = s.subscriptionPlans.find((p) => p.id === 'kimi-coding')
+    const volcPlan = s.subscriptionPlans.find((p) => p.id === 'volcengine-coding-plan')
+    assert.ok(kimiPlan && volcPlan, 'kimi 与火山套餐都要在：' + JSON.stringify(s.subscriptionPlans.map((p) => p.id)))
+    assert.equal(volcPlan.rates.input, 3.0, '火山等效单价来自 pricing.js 的 VOLCENGINE_PLAN_RATES')
+    assert.ok(volcPlan.providers.includes('byteblus-coding-plan-cn'), '火山套餐要列出专属端点的 provider 别名')
+    assert.ok(volcPlan.models.length > 0, '火山套餐要给出白名单模型数')
+
+    // priceSnapshot 本身（管理端 /prices 与 /api/v1/protocol 都读它）也要暴露
+    const prices = (await adminGet(h.url, cookie, 'prices')).body.prices
+    assert.ok(Array.isArray(prices.subscriptionPlans) && prices.subscriptionPlans.length >= 2, 'priceSnapshot 应含 subscriptionPlans')
+    // protocol（无需鉴权）同样能看到 —— 采集端据此自查口径
+    const proto = await fetchRetry(h.url + '/api/v1/protocol')
+    const pb = await proto.json()
+    assert.ok(Array.isArray(pb.pricing && pb.pricing.subscriptionPlans), '/api/v1/protocol 应回显套餐说明')
+  } finally { await h.close() }
+})
+
+// ============================================================
+// 6. 管理端专属：设备令牌不得读新接口
+// ============================================================
+test('heatmap/subscriptions: 仅供管理端（设备令牌 401，未登录 401）', async () => {  const h = await boot()
   try {
     seed(h.app)
     for (const path of ['heatmap?range=30d', 'subscriptions?range=30d']) {
