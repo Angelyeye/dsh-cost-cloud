@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { loadDotEnv, resolveConfig, formatConfigProblems } from './config.js'
+import { setPeakHolidays, getPeakHolidays } from './pricing.js'
 import { listen } from './server.js'
 import { openDatabase } from './db.js'
 import { registerDevice } from './ingest.js'
@@ -52,8 +53,11 @@ function loadConfigOrExit() {
 
 async function cmdStart() {
   const config = loadConfigOrExit()
+  // 峰谷口径（含法定节假日）必须在任何入库重算之前注入，否则启动早期的批次会按内置表判定
+  const holidays = setPeakHolidays(config.peakHolidays)
   mkdirSync(config.dataDir, { recursive: true })
   const log = (m) => console.log('[dsh-cost-cloud] ' + m)
+  log('peak holidays: ' + (holidays.disabled ? 'disabled（仅周末）' : holidays.count + ' days ' + (holidays.builtin ? '(builtin)' : '(custom)')))
   const { url, app, server } = await listen(config, { log })
   log('listening on ' + config.host + ':' + config.port + ' → ' + url)
   log('dashboard: ' + url + '/ · health: ' + url + '/healthz · ingest: ' + url + '/api/v1/health')

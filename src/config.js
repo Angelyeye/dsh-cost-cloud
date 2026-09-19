@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
 
-const SERVICE_VERSION = '1.4.1'
+const SERVICE_VERSION = '1.4.2'
 const SYNC_VER = 1
 
 function bool(v, fallback) {
@@ -118,6 +118,11 @@ export function resolveConfig(env, opts) {
     batchIdempotencyHours: intIn(e.BATCH_IDEMPOTENCY_HOURS, 1, 24 * 365, 168),
     timezoneLabel: 'Asia/Shanghai (UTC+8)',
     pricingSource: 'dsh-cost-tracker/pricing.js',
+    // v1.4.2：法定节假日表（官方把节假日全天计入空闲时段）。默认（空）= 用 pricing.js
+    // 内置的 CN_HOLIDAYS；'none'/'off' = 停用（只按周末判定）；也可写
+    // "2027-01-01 2027-02-05" 这类自定义列表（逗号/空白分隔）—— 由 setPeakHolidays 解释。
+    // 采集端插件与本服务必须同口径，否则本地记账金额与入库重算金额会不一致。
+    peakHolidays: String(e.DSH_PEAK_HOLIDAYS || '').trim(),
   }
   return { ok: true, config, hints }
 }

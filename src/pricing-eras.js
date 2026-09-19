@@ -13,7 +13,7 @@
 // 上报 cost 仍然只用于计算口径漂移（cost_drift）。
 // ============================================================
 import { getMeta, setMeta } from './db.js'
-import { setSyncedEras, getSyncedEras, eraAt } from './pricing.js'
+import { setSyncedEras, getSyncedEras, eraAt, PEAK_WINDOWS } from './pricing.js'
 import { fetchOfficialPrices, buildSyncedEra, diffAgainstEra } from './price-sync.js'
 
 export const PRICING_ERAS_META = 'pricing_eras'
@@ -67,6 +67,8 @@ export function pricingStatus(db) {
     currentEra: cur.id,
     eraLabel: cur.label,
     eraSynced: cur.synced === true,
+    // 峰谷文案（含「周末与法定节假日全天闲时」）：采集端据此核对两边峰谷口径是否一致
+    peakWindows: PEAK_WINDOWS,
     lastCheck: lastPricingCheck(db),
     syncedEras: getSyncedEras().map((e) => ({ id: e.id, label: e.label, since: e.since, models: e.models, routes: e.routes || {} })),
   }

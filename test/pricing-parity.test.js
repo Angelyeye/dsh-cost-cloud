@@ -10,7 +10,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { computeCostAt, isPeak, normalizeProvider, priceFor, eraAt, PRICE_ERAS, PEAK_HOUR_WINDOWS, V41_FLASH_MODEL, V41_PRO_ROUTE_AT } from '../src/pricing.js'
+import { computeCostAt, isPeak, normalizeProvider, priceFor, eraAt, PRICE_ERAS, PEAK_HOUR_WINDOWS, V41_FLASH_MODEL, CN_HOLIDAYS } from '../src/pricing.js'
 import { dayKey, monthKey, dayStartMs, enumerateDays, resolveRange } from '../src/time.js'
 
 /** 期望值：按高峰价 × 闲时系数独立计算 */
@@ -76,28 +76,51 @@ test('计费时代：同一模型在 v41 生效前后取不同价，且路由到
   assert.ok(Math.abs(b.cost - expectCost(V41, false, tokens)) < 1e-9, 'v41 ' + b.cost)
 })
 
-test('V4-Pro 路由时刻：9-14 12:00 前按自有牌价，之后路由到 V4.1 Flash', () => {
-  // 官方通告：北京时间 2026-09-14 12:00 之后 deepseek-v4-pro 才路由到 V4.1 Flash
-  assert.equal(V41_PRO_ROUTE_AT, Date.UTC(2026, 8, 14, 4, 0, 0))
+test('V4-Pro 维持自有牌价：任何时刻都不路由（官方 2026-09-14 撤销下线计划）', () => {
+  // 依据：官方更新日志「决定在 2026 年 9 月 14 日之后继续提供 DeepSeek V4 Pro 的
+  // API 调用服务，计费方式保持不变」+ 现行价目页为 pro 单列 9.0/27.0/0.30、独立并发 500。
   const tokens = { input: 100000, output: 20000, cacheRead: 500000, cacheWrite: 0, reasoning: 0 }
-  // 窗口内：北京时间 2026-09-12 周六 10:00（闲时，Flash 已调价但 V4-Pro 仍是自有牌价）
-  const midTs = Date.UTC(2026, 8, 12, 2, 0, 0)
-  // 路由后：北京时间 2026-09-15 周二 10:00（高峰）
-  const postTs = Date.UTC(2026, 8, 15, 2, 0, 0)
-  assert.equal(eraAt(midTs).id, 'v41')
-  assert.equal(eraAt(postTs).id, 'v41pro')
-  const mid = computeCostAt('deepseek-official', 'deepseek-v4-pro', midTs, tokens)
-  assert.equal(mid.model, 'deepseek-v4-pro', '路由前保持自有模型名')
-  assert.equal(mid.estimated, false, '路由前仍走精确档（不得落入兜底估算）')
-  assert.ok(Math.abs(mid.cost - expectCost(PRO, false, tokens)) < 1e-9, '路由前按 V4-Pro 闲时价 ' + mid.cost)
-  const post = computeCostAt('deepseek-official', 'deepseek-v4-pro', postTs, tokens)
-  assert.equal(post.model, V41_FLASH_MODEL, '路由后改按 V4.1 Flash 入账')
-  assert.ok(Math.abs(post.cost - expectCost(V41, true, tokens)) < 1e-9, '路由后按 Flash 高峰价 ' + post.cost)
-  // 边界：路由时刻前一毫秒仍未路由
-  const edge = computeCostAt('deepseek-official', 'deepseek-v4-pro', V41_PRO_ROUTE_AT - 1, tokens)
-  assert.equal(edge.model, 'deepseek-v4-pro', '12:00 前一毫秒仍未路由')
-  const edge2 = computeCostAt('deepseek-official', 'deepseek-v4-pro', V41_PRO_ROUTE_AT, tokens)
-  assert.equal(edge2.model, V41_FLASH_MODEL, '12:00 整点起路由')
+  // 采样点：调价前 / 曾被误当边界的 9-14 12:00 前后 / 之后
+  const samples = [
+    Date.UTC(2026, 8, 10, 3, 59, 59),   // 北京 09-10 11:59:59（legacy）
+    Date.UTC(2026, 8, 12, 2, 0, 0),     // 北京 09-12 周六 10:00（闲时）
+    Date.UTC(2026, 8, 14, 4, 0, 0) - 1, // 北京 09-14 11:59:59.999
+    Date.UTC(2026, 8, 14, 4, 0, 0),     // 北京 09-14 12:00:00.000
+    Date.UTC(2026, 8, 15, 2, 0, 0),     // 北京 09-15 周二 10:00（高峰）
+  ]
+  for (const ts of samples) {
+    const r = computeCostAt('deepseek-official', 'deepseek-v4-pro', ts, tokens)
+    assert.equal(r.model, 'deepseek-v4-pro', 'pro 始终以自有模型名入账 @' + ts)
+    assert.equal(r.estimated, false, 'pro 始终走精确档（不落入兜底估算）@' + ts)
+    const peak = isPeak(ts)
+    assert.ok(Math.abs(r.cost - expectCost(PRO, peak, tokens)) < 1e-9, 'pro 按自有牌价（高峰 9/27/0.30）@' + ts)
+  }
+  // 新版时代结构：只有 legacy / v41 两版，且都不含 pro 路由
+  assert.equal(eraAt(Date.UTC(2026, 8, 15, 2, 0, 0)).id, 'v41')
+  for (const era of PRICE_ERAS) {
+    assert.equal((era.routes || {})['deepseek-v4-pro'], undefined, '时代 ' + era.id + ' 不得有 pro 反向路由')
+    assert.ok(era.models['deepseek-v4-pro'], '时代 ' + era.id + ' 保留 pro 自有牌价')
+  }
+})
+
+test('法定节假日：全天闲时（官方口径「不含中国法定节假日」）', () => {
+  assert.ok(CN_HOLIDAYS.length >= 30, '内置 2026 全年放假日')
+  // 北京 10:00 的峰段时刻：平日高峰、节假日闲时
+  const at10 = (mo, d) => Date.UTC(2026, mo - 1, d, 2, 0, 0)
+  assert.equal(isPeak(at10(9, 24)), true, '09-24 周四（平日）→ 高峰')
+  assert.equal(isPeak(at10(9, 25)), false, '09-25 周五（中秋）→ 闲时')
+  assert.equal(isPeak(at10(10, 1)), false, '10-01 周四（国庆）→ 闲时')
+  assert.equal(isPeak(at10(10, 5)), false, '10-05 周一（国庆）→ 闲时')
+  assert.equal(isPeak(at10(10, 8)), true, '10-08 周四（节后）→ 高峰')
+  assert.equal(isPeak(at10(2, 16)), false, '02-16 周一（春节）→ 闲时')
+  assert.equal(isPeak(at10(5, 9)), false, '05-09 周六（调休补班）→ 仍闲时')
+  // 计费口径随之改变：同一批 token 在节假日按闲时（半价）
+  const tokens = { input: 1000000, output: 1000000, cacheRead: 0, cacheWrite: 0, reasoning: 0 }
+  const holiday = computeCostAt('deepseek-official', 'deepseek-flash', at10(10, 1), tokens)
+  const workday = computeCostAt('deepseek-official', 'deepseek-flash', at10(10, 8), tokens)
+  assert.equal(holiday.period, 'off-peak', '节假日计入闲时档')
+  assert.equal(workday.period, 'peak', '平日高峰档')
+  assert.ok(Math.abs(workday.cost - holiday.cost * 2) < 1e-9, '闲时恰为高峰半价')
 })
 
 test('provider 归一化：-official 后缀不影响兜底价命中', () => {
@@ -156,12 +179,11 @@ test('Kimi 回归：整档订阅语义未被模型白名单改造破坏', () => 
 })
 
 test('价格表结构完整（era / routes / 峰窗口）', () => {
-  assert.equal(PRICE_ERAS.length, 3, 'legacy / v41 / v41pro 三个计费时代')
+  assert.equal(PRICE_ERAS.length, 2, 'legacy / v41 两个计费时代（v1.9.2 起取消 v41pro）')
   assert.equal(V41_FLASH_MODEL, 'deepseek-flash', '规范名 = 官方现役模型名')
-  assert.equal(PRICE_ERAS[2].routes['deepseek-v4-pro'], V41_FLASH_MODEL)
-  assert.equal(PRICE_ERAS[1].routes['deepseek-v4-pro'], undefined, 'v41 时代不含 V4-Pro 路由（9-14 12:00 才生效）')
+  assert.equal(PRICE_ERAS[1].routes['deepseek-v4-pro'], undefined, 'v41 时代不含 V4-Pro 反向路由')
   assert.equal(PRICE_ERAS[1].routes['deepseek-v4-flash'], V41_FLASH_MODEL)
-  assert.equal(PRICE_ERAS[1].models['deepseek-v4-pro'].input, 9.0, '路由前保留 V4-Pro 自有牌价')
+  assert.equal(PRICE_ERAS[1].models['deepseek-v4-pro'].input, 9.0, 'V4-Pro 保留自有牌价 9.0')
   assert.deepEqual(PEAK_HOUR_WINDOWS, [{ start: 9, end: 12 }, { start: 14, end: 18 }])
 })
 

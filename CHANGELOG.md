@@ -3,6 +3,35 @@
 本服务是「多设备用量汇总 + 云端权威算价」的采集端服务。版本号与插件
 `@angelyeye/dsh-cost-tracker` 独立演进；两者通过 `syncVer` 契约与同源价格表协作。
 
+## 1.4.2
+
+**同源计价：跟随插件 v1.9.2（V4-Pro 不再路由到 Flash + 法定节假日全天闲时）**
+
+配套：`@angelyeye/dsh-cost-tracker` **v1.9.2**。
+
+- **价格表同源刷新**：`src/pricing.js` 同步插件的两处口径修正 ——
+  ① `deepseek-v4-pro` **取消反向路由**、维持自有牌价 9.0 / 27.0 / 0.30
+  （官方 2026-09-14 撤销了下线计划；此前 `v41pro` 时代会把 pro 调用按 Flash 价计，
+  低估约 3.4～4.5 倍），`PRICE_ERAS` 回到 `legacy` / `v41` 两版，
+  导出 `V41_PRO_ROUTE_AT` 一并删除；
+  ② 新增 `CN_HOLIDAYS`（2026 全年 33 天）与 `setPeakHolidays` / `getPeakHolidays` /
+  `isCnHoliday` / `holidayKeyAt`：法定节假日全天计入闲时（此前只排除周末，
+  节假日落在工作日会按高峰多计 1 倍），调休补班的周六/周日仍为闲时。
+- **新增 `scripts/sync-pricing-copy.js`**：把「手工拷贝 pricing.js + 手改哈希」变成一条命令
+  （`node scripts/sync-pricing-copy.js [--check] [插件仓库路径]`），只注入云端专属头注释、
+  `PRICING_SOURCE_HASH` 与尾部云端追加段，杜绝双端计价漂移。
+  `PRICING_SOURCE_HASH` 更新为 `sha256:4420f2df88d783f5`。
+- **新增环境变量 `DSH_PEAK_HOLIDAYS`**（留空 = 内置表；`none`/`off` = 停用；
+  或自定义列表）：云端与采集端必须同口径，否则本地金额与入库重算金额会不一致。
+  启动日志会打印当前生效来源与天数。
+- **`GET /api/v1/protocol`** 的 `pricing` 新增 `peakHolidays`（来源 `builtin|custom|disabled`、
+  条数与被忽略的非法条目），采集端据此自查峰谷判定是否与服务端一致。
+- **同源校验加强**（`npm run test:pricing`）：新增 `CN_HOLIDAYS` / `PEAK_WINDOWS` 逐值比对、
+  「任何时代都不得有 pro 反向路由」、「`V41_PRO_ROUTE_AT` 已废除」，
+  以及 **`isPeak` 同源抽样**（节假日 / 调休补班 / 平日边界两侧结论必须一致）。
+- 测试：`test/pricing-parity.test.js` 的 V4-Pro 用例改为「任何时刻都不路由」并新增
+  法定节假日用例（含「闲时恰为高峰半价」的金额断言）；`136 passed / 0 failed`。
+
 ## 1.4.1
 
 **修复：订阅套餐「看得见数据、看不见套餐」——火山方舟 Coding Plan 的说明缺失**

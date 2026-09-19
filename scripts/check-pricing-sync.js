@@ -40,9 +40,43 @@ cmp('PROVIDER_RATES', cloud.PROVIDER_RATES, plugin.PROVIDER_RATES)
 cmp('GENERIC_RATES', cloud.GENERIC_RATES, plugin.GENERIC_RATES)
 cmp('PEAK_HOUR_WINDOWS', cloud.PEAK_HOUR_WINDOWS, plugin.PEAK_HOUR_WINDOWS)
 cmp('V41_EFFECTIVE_AT', cloud.V41_EFFECTIVE_AT, plugin.V41_EFFECTIVE_AT)
-cmp('V41_PRO_ROUTE_AT', cloud.V41_PRO_ROUTE_AT, plugin.V41_PRO_ROUTE_AT)
+// v1.9.2：官方撤销 V4-Pro 下线计划 → 时代回到 2 版且任何时代都不得有 pro 反向路由
 cmp('V41_FLASH_MODEL', cloud.V41_FLASH_MODEL, plugin.V41_FLASH_MODEL)
 cmp('MODEL_ALIASES', cloud.MODEL_ALIASES, plugin.MODEL_ALIASES)
+cmp('CN_HOLIDAYS', cloud.CN_HOLIDAYS, plugin.CN_HOLIDAYS)
+cmp('PEAK_WINDOWS', cloud.PEAK_WINDOWS, plugin.PEAK_WINDOWS)
+checks.push({
+  name: 'PRICE_ERAS 无 V4-Pro 反向路由',
+  ok: cloud.PRICE_ERAS.every((e) => !(e.routes || {})['deepseek-v4-pro'])
+    && plugin.PRICE_ERAS.every((e) => !(e.routes || {})['deepseek-v4-pro']),
+  cloud: JSON.stringify(cloud.PRICE_ERAS.map((e) => e.routes || {})),
+  plugin: JSON.stringify(plugin.PRICE_ERAS.map((e) => e.routes || {})),
+})
+checks.push({
+  name: 'V41_PRO_ROUTE_AT 已废除（两侧都不再导出）',
+  ok: cloud.V41_PRO_ROUTE_AT === undefined && plugin.V41_PRO_ROUTE_AT === undefined,
+  cloud: String(cloud.V41_PRO_ROUTE_AT),
+  plugin: String(plugin.V41_PRO_ROUTE_AT),
+})
+// 节假日判定必须同源：同一时刻两侧的 isPeak 结论必须一致（含节假日/调休/周末边界）
+{
+  const samples = [
+    Date.UTC(2026, 9, 1, 2, 0),   // 国庆 10-01 10:00 北京（节假日 → 闲时）
+    Date.UTC(2026, 9, 5, 7, 0),   // 国庆 10-05 15:00 北京（节假日 → 闲时）
+    Date.UTC(2026, 9, 8, 2, 0),   // 节后 10-08 10:00 北京（工作日 → 高峰）
+    Date.UTC(2026, 8, 25, 2, 0),  // 中秋 09-25 10:00 北京（节假日 → 闲时）
+    Date.UTC(2026, 1, 16, 2, 0),  // 春节 02-16 10:00 北京（节假日 → 闲时）
+    Date.UTC(2026, 4, 9, 2, 0),   // 调休补班周六 05-09 10:00 北京（仍闲时）
+    Date.UTC(2026, 7, 21, 2, 0),  // 平日周五 08-21 10:00 北京（高峰）
+  ]
+  const mismatches = samples.filter((ts) => cloud.isPeak(ts) !== plugin.isPeak(ts))
+  checks.push({
+    name: 'isPeak 同源（含节假日 / 调休 / 平日边界）',
+    ok: mismatches.length === 0,
+    cloud: JSON.stringify(samples.map((ts) => cloud.isPeak(ts))),
+    plugin: JSON.stringify(samples.map((ts) => plugin.isPeak(ts))),
+  })
+}
 
 // 来源内容哈希：云端常量须等于插件仓库 pricing.js 的实测 sha256（前 16 位）
 {

@@ -162,6 +162,12 @@ curl -H "Authorization: Bearer $DSH_SYNC_TOKEN" "http://127.0.0.1:8787/api/v1/ov
 - **费用来源**：以设备上报值为准（历史价格时代无法回溯时，云端重算会与设备不一致）；
   云端同时按自己内置的价格表重算一遍，两者差值即「口径漂移」，在看板提示 ——
   常见原因是某台设备插件版本较旧（升级后可用 `cost_recompute` 补账）。
+- **峰谷（含法定节假日）**：高峰 = 北京时间**周一至周五 9:00-12:00、14:00-18:00，且不含中国法定节假日**；
+  其余时段（周末 + 法定节假日全天）按闲时（高峰 × 0.5）。节假日表默认用 `pricing.js` 内置的
+  `CN_HOLIDAYS`（2026 全年 33 天），可用 **`DSH_PEAK_HOLIDAYS`** 覆盖或停用（见 `.env.example`）；
+  **调休补班的周六/周日仍算闲时**（定价规则只看「周一至周五」）。采集端插件必须同口径，
+  否则「设备上报值」与「云端重算值」会不一致，`GET /api/v1/protocol` 的 `pricing.peakHolidays`
+  就是给采集端自查用的。
 - **明细 vs 日汇总**：设备本地明细保留 180 天，更早折叠为永久日汇总；云端两者都收，
   通过 `absorbed` 墓碑避免重叠计数。
 
@@ -289,6 +295,21 @@ test/           node --test 测试
 ---
 
 ## 更新记录
+
+### v1.4.2
+
+**同源计价：跟随插件 v1.9.2（V4-Pro 不再路由到 Flash + 法定节假日全天闲时）**
+
+- `src/pricing.js` 同步插件两处口径修正：① `deepseek-v4-pro` **取消反向路由**、维持自有牌价
+  9.0 / 27.0 / 0.30（官方 2026-09-14 撤销下线计划；此前会把 pro 调用按 Flash 价计，低估约 3.4～4.5 倍），
+  `PRICE_ERAS` 回到 `legacy` / `v41` 两版、`V41_PRO_ROUTE_AT` 删除；② 新增法定节假日全天闲时
+  （`CN_HOLIDAYS` + `setPeakHolidays` / `isCnHoliday`），调休补班的周末仍闲时。
+- 新增 `scripts/sync-pricing-copy.js`（`npm run sync:pricing` / `check:pricing-copy`）：
+  把「手工拷贝 + 手改哈希」变成可复现的一条命令；`PRICING_SOURCE_HASH` 更新为 `sha256:4420f2df88d783f5`。
+- 新增配置项 **`DSH_PEAK_HOLIDAYS`**（留空 = 内置；`none`/`off` = 停用；或自定义列表），
+  启动日志打印当前来源与天数；`GET /api/v1/protocol` 的 `pricing` 新增 `peakHolidays` 回显。
+- 同源校验加强：节假日表 / 峰谷文案逐值比对 + 「任何时代不得有 pro 反向路由」+ **`isPeak` 同源抽样**
+  （节假日、调休补班、平日边界两侧结论必须一致）。测试 `136 passed / 0 failed`。
 
 ### v1.4.1
 

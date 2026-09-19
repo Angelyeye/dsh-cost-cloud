@@ -4,22 +4,30 @@
 // ⚠️ 本文件是插件仓库 `dsh-cost-tracker/pricing.js` 的**刻意副本**（v1.9.0 起
 // 除本段注释与 PRICING_SOURCE_HASH 常量外逐字节一致，见
 // scripts/check-pricing-sync.js 的同源校验）。改动计价逻辑请先改插件仓库，
-// 再同步本副本并重算 PRICING_SOURCE_HASH。
+// 再跑 `node scripts/sync-pricing-copy.js` 刷新本副本与 PRICING_SOURCE_HASH。
 //
 // 单价来源：DeepSeek 官方定价页
 //   https://api-docs.deepseek.com/zh-cn/quick_start/pricing
-//   - 高峰时段（北京时间周一至周五 9:00-12:00、14:00-18:00）为表内价格；
-//     空闲时段 = 高峰 × 0.5。周末（周六/周日）全天计入空闲时段（该窗口两版价通用）。
+//   - 高峰时段（北京时间周一至周五 9:00-12:00、14:00-18:00，**不含中国法定节假日**）
+//     为表内价格；其余时段（含周末与法定节假日全天）= 高峰 × 0.5。
 //   - **单价随时间调整**：故单价表按生效时刻分版（见 PRICE_ERAS），按记录时间戳选版。
 //       · legacy  ：V4-Flash 3.0/9.0/0.10、V4-Pro 9.0/27.0/0.30
 //       · v41     ：V4.1 Flash 2.0/8.0/0.04（北京时间 2026-09-10 12:00 起生效）。
 //                   官方现役模型名为 `deepseek-flash`；旧名 `deepseek-v4-flash` 与
 //                   `deepseek-v4-flash-vision-exp` 已下线但仍可调用，请求由 V4.1 Flash
 //                   提供服务并按 Flash 价计费，故一并路由到 `deepseek-flash`。
-//       · v41pro  ：同一档单价，**V4-Pro 路由在此才开始**：官方通告为「北京时间 2026-09-14
-//                   12:00 之后，deepseek-v4-pro 的请求全部路由到 V4.1 Flash 并按 V4.1 Flash
-//                   单价计费」（价格卡脚注 (2) 同口径）。9/10 12:00 ～ 9/14 12:00 之间的
-//                   V4-Pro 请求按 V4-Pro 自有牌价 9.0/27.0/0.30 计费，不可提前折算。
+//                   **V4-Pro 维持自有牌价（9.0/27.0/0.30），不做任何路由**：
+//                   09-10 新闻稿确实预告过「9-14 12:00 之后 pro 请求全部路由到 V4.1 Flash
+//                   并按 Flash 单价计费」，v1.9.0/1.9.1 据此实现了 v41pro 时代；但官方
+//                   **更新日志随后改为**「为响应广大用户的需求，我们决定在 2026 年 9 月 14 日
+//                   之后继续提供 DeepSeek V4 Pro 的 API 调用服务，计费方式保持不变」，
+//                   且现行价目页仍为 pro **单列价格**（9.0/27.0/0.30）与**独立并发 500**
+//                   （flash 为 2500），脚注只把旧 flash 名与 `deepseek-v4.1-flash` 路由到
+//                   flash。故 v1.9.2 起**取消 pro 的反向路由**：否则会按 Flash 价计 pro 调用
+//                   （输入 2 vs 9、输出 8 vs 27），显著低估。
+//   - 法定节假日（isPeak / peakPhaseAt 的 offAllDay）：官方口径把节假日全天计入空闲时段，
+//     数据来自国务院办公厅节假日安排通知（见 CN_HOLIDAYS）。调休补班的周六/周日**不**计高峰
+//     —— 定价规则只看「周一至周五」，调休不改变这一点。
 //   - deepseek-v4-flash-vision-exp 与 deepseek-v4-flash 在 legacy 时代单价一致。
 //   - 模型名归一化后 `deepseek-v4.1-flash` 等同为 `deepseek-flash` 的等价写法，命中同一档。
 //
@@ -49,16 +57,8 @@
 export const V41_EFFECTIVE_AT = Date.UTC(2026, 8, 10, 4, 0, 0)
 
 /** 与插件仓库 pricing.js 的 sha256 同源校验值（scripts/check-pricing-sync.js 比对）。
- *  v1.9.0 同步副本后重算：sha256:d5dd3f0dacb08241 */
-export const PRICING_SOURCE_HASH = 'sha256:d5dd3f0dacb08241'
-
-/**
- * V4-Pro 请求被路由到 V4.1 Flash 的生效时刻：北京时间 2026-09-14 12:00。
- * 官方表述：「北京时间 2026 年 9 月 14 日 12:00 之后，至未来 V4.1 Pro 上线之前，
- * 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。
- * 注意它与 V41_EFFECTIVE_AT（9-10 12:00）不是同一时刻，提前折算会低估 V4-Pro 花费。
- */
-export const V41_PRO_ROUTE_AT = Date.UTC(2026, 8, 14, 4, 0, 0)
+ *  由 scripts/sync-pricing-copy.js 自动重算；请勿手改。 */
+export const PRICING_SOURCE_HASH = 'sha256:4420f2df88d783f5'
 
 /**
  * V4.1 Flash 档的规范（官方现役）模型名。
@@ -81,33 +81,17 @@ export const PRICE_ERAS = [
   },
   {
     id: 'v41',
-    label: 'V4.1 Flash 价（2026-09-10 12:00 起；V4-Pro 此时仍按自有牌价）',
+    label: 'V4.1 Flash 价（2026-09-10 12:00 起；V4-Pro 维持自有牌价）',
     since: V41_EFFECTIVE_AT,
     models: {
       // 高峰价：输入（缓存命中）0.04 / 输入（缓存未命中）2 / 输出 8；空闲减半
       [V41_FLASH_MODEL]: { input: 2.0, output: 8.0, cacheRead: 0.04, cacheWrite: 0.04 },
-      // V4-Pro 尚在「自有牌价」窗口（9-14 12:00 前不路由），故本时代仍需保留其单价，
-      // 否则会落入 provider 兜底而被误标记为「估算」。
+      // V4-Pro 维持自有牌价：官方 9-14 撤销了下线计划（「继续提供服务，计费方式保持不变」），
+      // 现行价目页仍为其单列 9.0/27.0/0.30 与独立并发 500 —— 因此**不做路由**。
       'deepseek-v4-pro': { input: 9.0, output: 27.0, cacheRead: 0.30, cacheWrite: 0.30 },
     },
     // 旧 V4-Flash 系（含视觉版）已下线，请求由 V4.1 Flash 提供并按 Flash 价计费。
-    // V4-Pro 此时尚未路由（官方路由时刻为 9-14 12:00，见下一个时代）。
     routes: {
-      'deepseek-v4-flash': V41_FLASH_MODEL,
-      'deepseek-v4-flash-vision-exp': V41_FLASH_MODEL,
-    },
-    proRouteSince: V41_PRO_ROUTE_AT,
-  },
-  {
-    id: 'v41pro',
-    label: 'V4.1 Flash 价 + V4-Pro 路由（2026-09-14 12:00 起）',
-    since: V41_PRO_ROUTE_AT,
-    models: {
-      [V41_FLASH_MODEL]: { input: 2.0, output: 8.0, cacheRead: 0.04, cacheWrite: 0.04 },
-    },
-    // V4.1 Pro 上线前，V4-Pro 的请求全部路由到 V4.1 Flash 并按 V4.1 Flash 单价计费。
-    routes: {
-      'deepseek-v4-pro': V41_FLASH_MODEL,
       'deepseek-v4-flash': V41_FLASH_MODEL,
       'deepseek-v4-flash-vision-exp': V41_FLASH_MODEL,
     },
@@ -412,8 +396,8 @@ export const PROVIDER_RATES = {
 /** 未知模型兜底单价（估算）；缓存写入按缓存命中价计。 */
 export const GENERIC_RATES = { input: 2.0, output: 8.0, cacheRead: 0.5, cacheWrite: 0.5 }
 
-/** 高峰时段（北京时间，仅周一至周五），空闲时段 = 高峰 × 0.5；周末全天空闲 */
-export const PEAK_WINDOWS = '周一至周五 9:00-12:00 · 14:00-18:00（周末全天闲时）'
+/** 高峰时段（北京时间，仅周一至周五且非法定节假日），空闲时段 = 高峰 × 0.5 */
+export const PEAK_WINDOWS = '周一至周五 9:00-12:00 · 14:00-18:00（周末与法定节假日全天闲时）'
 
 /** 视觉模型名（DeepSeek DeepSeek-V4-Flash-Vision-Exp） */
 export const VISION_MODEL = 'deepseek-v4-flash-vision-exp'
@@ -421,11 +405,133 @@ export const VISION_MODEL = 'deepseek-v4-flash-vision-exp'
 /** 每张图片换算 token 的上限（官方规则） */
 export const VISION_IMAGE_MAX_TOKENS = 384
 
-/** 是否高峰时段（北京时间 UTC+8，仅周一至周五；周末全天空闲） */
+// ------------------------------------------------------------
+// 中国法定节假日（官方峰谷口径：节假日全天计入空闲时段）
+//
+// 官方价目页脚注：「北京时间周一至周五（**不含中国法定节假日**）9:00-12:00、
+// 14:00-18:00 为高峰时段；其余时段，包括周末及中国法定节假日全天均为空闲时段。」
+// 因此仅排除周末是不够的：节假日落在一周内时，峰段也必须按闲时计（否则会多计 1 倍）。
+//
+// 数据来源：国务院办公厅关于节假日安排的通知。
+//   · 2026 年：国办发明电〔2025〕7 号（2025-11-04 发布）
+//     https://www.gov.cn/zhengce/zhengceku/202511/content_7047091.htm
+// 调休补班的周六/周日**不计高峰**：定价规则只看「周一至周五」，调休不改变这一点。
+// 新一年度的安排通常在上一年 11 月公布，届时更新本表并随版本发布；也可在插件配置卡
+// 用 `peakHolidays` 覆盖（见 setPeakHolidays）。
+// ------------------------------------------------------------
+export const CN_HOLIDAYS = [
+  // 2026 · 元旦 1/1-1/3
+  '2026-01-01', '2026-01-02', '2026-01-03',
+  // 2026 · 春节 2/15-2/23
+  '2026-02-15', '2026-02-16', '2026-02-17', '2026-02-18', '2026-02-19',
+  '2026-02-20', '2026-02-21', '2026-02-22', '2026-02-23',
+  // 2026 · 清明 4/4-4/6
+  '2026-04-04', '2026-04-05', '2026-04-06',
+  // 2026 · 劳动节 5/1-5/5
+  '2026-05-01', '2026-05-02', '2026-05-03', '2026-05-04', '2026-05-05',
+  // 2026 · 端午 6/19-6/21
+  '2026-06-19', '2026-06-20', '2026-06-21',
+  // 2026 · 中秋 9/25-9/27
+  '2026-09-25', '2026-09-26', '2026-09-27',
+  // 2026 · 国庆 10/1-10/7
+  '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04',
+  '2026-10-05', '2026-10-06', '2026-10-07',
+]
+
+/** 把 'YYYY-MM-DD' / 'YYYY/M/D' 归一为 'YYYY-MM-DD'；非法返回 '' */
+function normHolidayKey(s) {
+  const m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(String(s == null ? '' : s).trim())
+  if (!m) return ''
+  const mm = Number(m[2])
+  const dd = Number(m[3])
+  if (!(mm >= 1 && mm <= 12) || !(dd >= 1 && dd <= 31)) return ''
+  return m[1] + '-' + (mm < 10 ? '0' + mm : String(mm)) + '-' + (dd < 10 ? '0' + dd : String(dd))
+}
+
+/** 归一化节假日列表：接受数组或「逗号/分号/空白分隔」的整串，去重并升序 */
+export function normalizeHolidayList(input) {
+  const out = []
+  if (Array.isArray(input)) {
+    for (const s of input) { const k = normHolidayKey(s); if (k) out.push(k) }
+  } else if (typeof input === 'string') {
+    for (const s of input.split(/[\s,，;；]+/)) { const k = normHolidayKey(s); if (k) out.push(k) }
+  }
+  return Array.from(new Set(out)).sort()
+}
+
+// null = 使用内置表 CN_HOLIDAYS；[] = 显式停用（不排除任何节假日）；否则为用户覆盖列表
+let PEAK_HOLIDAY_LIST = null
+let PEAK_HOLIDAY_SET = null // Set<string>（null 时按需从 CN_HOLIDAYS 构建）
+
+/**
+ * 覆盖法定节假日列表（插件配置卡的「峰谷计价与提示」）。语义防呆：
+ *   · 传 null / undefined / ''  → 恢复内置表（默认）；config 里存空串即走这条；
+ *   · 传 'none' / 'off' / '0'   → 显式停用（不排除任何节假日，等价于按「仅周末」计）；
+ *   · 传数组或分隔字符串        → 用该列表**整体替换**内置表（不追加）；
+ *   · 传了内容但一条都解析不出  → 视为停用并记入 invalid，如实回显，
+ *                                避免「以为关掉了节假日，其实还在用内置表」。
+ * @returns {{dates:string[], mode:'builtin'|'custom'|'disabled', builtin:boolean, disabled:boolean, count:number, invalid:string[]}}
+ */
+export function setPeakHolidays(input) {
+  if (Array.isArray(input)) {
+    PEAK_HOLIDAY_LIST = normalizeHolidayList(input)
+  } else if (input === null || input === undefined) {
+    PEAK_HOLIDAY_LIST = null
+  } else {
+    const raw = String(input).trim()
+    if (raw === '') PEAK_HOLIDAY_LIST = null
+    else if (/^(none|off|0|无|关|关闭)$/i.test(raw)) PEAK_HOLIDAY_LIST = []
+    else PEAK_HOLIDAY_LIST = normalizeHolidayList(raw)
+  }
+  PEAK_HOLIDAY_SET = null
+  return getPeakHolidays(typeof input === 'string' ? input : undefined)
+}
+
+/**
+ * 当前生效的节假日列表（含来源标记，便于配置卡回显与双端比对）。
+ * @param {string} [rawInput] - 可选：原始配置字符串（用于统计被忽略的非法条目）
+ */
+export function getPeakHolidays(rawInput) {
+  const list = PEAK_HOLIDAY_LIST === null ? CN_HOLIDAYS : PEAK_HOLIDAY_LIST
+  const invalid = []
+  if (typeof rawInput === 'string' && rawInput.trim() !== '' && !/^(none|off|0|无|关|关闭)$/i.test(rawInput.trim())) {
+    for (const tok of rawInput.split(/[\s,，;；]+/)) {
+      if (tok && !normHolidayKey(tok)) invalid.push(tok)
+    }
+  }
+  const mode = PEAK_HOLIDAY_LIST === null ? 'builtin' : (PEAK_HOLIDAY_LIST.length === 0 ? 'disabled' : 'custom')
+  return { dates: list.slice(), mode, builtin: mode === 'builtin', disabled: mode === 'disabled', count: list.length, invalid }
+}
+
+/** 某时刻所属的北京日历日（'YYYY-MM-DD'） */
+export function holidayKeyAt(ts) {
+  const t = Number(ts)
+  if (!Number.isFinite(t)) return ''
+  const d = new Date(t + 28800000)
+  const p = (n) => (n < 10 ? '0' + n : String(n))
+  return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate())
+}
+
+/** 北京日 index（D0，北京午夜为界）→ 'YYYY-MM-DD' */
+function holidayKeyOfDayIndex(D) {
+  return holidayKeyAt(D * 86400000 - 28800000 + 43200000) // 该北京日正午，避免边界歧义
+}
+
+/** 某时刻是否落在（配置生效的）中国法定节假日 */
+export function isCnHoliday(ts) {
+  const key = holidayKeyAt(ts)
+  if (!key) return false
+  const set = PEAK_HOLIDAY_SET || (PEAK_HOLIDAY_SET = new Set(PEAK_HOLIDAY_LIST === null ? CN_HOLIDAYS : PEAK_HOLIDAY_LIST))
+  return set.has(key)
+}
+
+/** 是否高峰时段（北京时间 UTC+8：周一至周五、非节假日、落在峰窗口内） */
 export function isPeak(ts) {
-  const d = new Date(ts + 28800000)
+  const t = Number(ts)
+  const d = new Date(t + 28800000)
   const day = d.getUTCDay() // 0=周日 … 6=周六
   if (day === 0 || day === 6) return false // 周末不计高峰
+  if (isCnHoliday(t)) return false // 法定节假日全天闲时
   const h = d.getUTCHours()
   return (h >= 9 && h < 12) || (h >= 14 && h < 18)
 }
@@ -435,31 +541,42 @@ export const PEAK_HOUR_WINDOWS = [{ start: 9, end: 12 }, { start: 14, end: 18 }]
 
 /**
  * 某一时刻所处的峰谷相位与相邻切换点（供时段条 / 倒计时 / 切换前弹窗）。
- * 与 isPeak 同口径（北京时间 UTC+8），并处理「周末全天谷价」：
- *  - 工作日：按峰窗口判定 inPeak，扫描前后 N 天收集切换点；
- *  - 周末：inPeak=false 且 weekend=true，日内无切换点（价格恒为谷），
- *    下一个价格切换点为下周一 09:00（首个峰窗口起点）。
+ * 与 isPeak 同口径（北京时间 UTC+8），并处理「全天谷价日」：
+ *  - 普通工作日：按峰窗口判定 inPeak，扫描前后 N 天收集切换点；
+ *  - 周末 / 法定节假日：inPeak=false、allDayOff=true，日内无切换点（价格恒为谷），
+ *    下一个价格切换点为下一个「工作日且非节假日」的首个峰窗口起点；
+ *    weekend / holiday 分别标记具体原因（节假日落在周末时 weekend 优先）。
  * @param {number} ts - epoch ms
- * @param {number} [spanDays=5] - 前后扫描天数（须覆盖最长周末间隔）
- * @returns {{inPeak:boolean, weekend:boolean, prevAtMs:number, nextAtMs:number,
- *            nextIntoPeak:boolean}|null} prevAtMs/nextAtMs 为相邻切换点 epoch ms
+ * @param {number} [spanDays=5] - 前后扫描天数（须覆盖最长连休：春节 9 天，故内部下限取 12）
+ * @returns {{inPeak:boolean, weekend:boolean, holiday:boolean, allDayOff:boolean,
+ *            prevAtMs:number, nextAtMs:number, nextIntoPeak:boolean}|null}
+ *          prevAtMs/nextAtMs 为相邻切换点 epoch ms（全天谷价日的 prevAtMs = 本段连休起点）
  */
 export function peakPhaseAt(ts, spanDays) {
   if (!Number.isFinite(ts)) return null
-  const SPAN = (Number.isFinite(spanDays) && spanDays >= 1) ? Math.floor(spanDays) : 5
+  // 连休最长可达 9 天（春节），默认扫描窗口必须比它大，否则会找不到下一切换点。
+  const SPAN = Math.max(12, (Number.isFinite(spanDays) && spanDays >= 1) ? Math.floor(spanDays) : 5)
   const DAY_MS = 86400000
   // 北京时间日 index 与星期（0=周日 … 6=周六；1970-01-01 为周四）。
   const D0 = Math.floor((ts + 28800000) / DAY_MS)
   const weekday = (D0 + 4) % 7
   const isWeekendNow = weekday === 6 || weekday === 0
+  const isHolidayNow = isCnHoliday(ts)
+  const allDayOffNow = isWeekendNow || isHolidayNow
   // 某北京时间日 D 的某时 h 对应的 epoch ms（北京 = UTC+8）。
   const atBeijing = (D, h) => D * DAY_MS - 28800000 + h * 3600000
-  // 收集 ±SPAN 天内全部窗口边界切换点，剔除落在周末（无价格变化）的点。
+  // 某北京时间日 D 是否为「全天谷价日」：周末或法定节假日。
+  const dayOff = (D) => {
+    const wd = (D + 4) % 7
+    if (wd === 6 || wd === 0) return true
+    const set = PEAK_HOLIDAY_SET || (PEAK_HOLIDAY_SET = new Set(PEAK_HOLIDAY_LIST === null ? CN_HOLIDAYS : PEAK_HOLIDAY_LIST))
+    return set.has(holidayKeyOfDayIndex(D))
+  }
+  // 收集 ±SPAN 天内全部窗口边界切换点，剔除落在全天谷价日（无价格变化）的点。
   const points = []
   for (let off = -SPAN; off <= SPAN; off += 1) {
     const D = D0 + off
-    const wd = (D + 4) % 7
-    if (wd === 6 || wd === 0) continue // 周末日内无切换
+    if (dayOff(D)) continue // 周末 / 节假日日内无切换
     for (const w of PEAK_HOUR_WINDOWS) {
       points.push({ at: atBeijing(D, w.start), intoPeak: true })
       points.push({ at: atBeijing(D, w.end), intoPeak: false })
@@ -471,13 +588,24 @@ export function peakPhaseAt(ts, spanDays) {
     if (p.at <= ts && (prev === null || p.at > prev.at)) prev = p
     if (p.at > ts && (next === null || p.at < next.at)) next = p
   }
-  if (isWeekendNow) {
-    // 周末全谷价：当前谷，下一切换 = 下周一首个峰窗口起点；prev = 周六 00:00（北京）。
+  if (allDayOffNow) {
+    // 全天谷价：当前谷，下一切换 = 下一个非谷价日的首个峰窗口起点；
+    // prev = 本段连休起点（北京时间 00:00），便于「本段已持续多久」类展示。
     if (next === null) return null
-    return { inPeak: false, weekend: true, prevAtMs: (D0 - weekday) * DAY_MS - 57600000, nextAtMs: next.at, nextIntoPeak: next.intoPeak }
+    let start = D0
+    for (let i = 0; i < SPAN && dayOff(start - 1); i += 1) start -= 1
+    return {
+      inPeak: false,
+      weekend: isWeekendNow,
+      holiday: isHolidayNow && !isWeekendNow,
+      allDayOff: true,
+      prevAtMs: start * DAY_MS - 28800000,
+      nextAtMs: next.at,
+      nextIntoPeak: next.intoPeak,
+    }
   }
   if (prev === null || next === null) return null
-  return { inPeak: isPeak(ts), weekend: false, prevAtMs: prev.at, nextAtMs: next.at, nextIntoPeak: next.intoPeak }
+  return { inPeak: isPeak(ts), weekend: false, holiday: false, allDayOff: false, prevAtMs: prev.at, nextAtMs: next.at, nextIntoPeak: next.intoPeak }
 }
 
 /**

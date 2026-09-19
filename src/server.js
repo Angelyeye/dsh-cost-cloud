@@ -14,7 +14,7 @@ import { randomBytes, createHash } from 'node:crypto'
 import { openDatabase, getMeta, setMeta } from './db.js'
 import { createIngest, authenticate, parseEnvelope, validateEnvelopeShape, registerDevice, mintToken } from './ingest.js'
 import * as Q from './query.js'
-import { priceSnapshot, PRICING_SOURCE, PRICING_SOURCE_HASH } from './pricing.js'
+import { priceSnapshot, PRICING_SOURCE, PRICING_SOURCE_HASH, getPeakHolidays } from './pricing.js'
 import { applyPricingEras, runPricingSync, pricingStatus, setPricingSyncUrl, clearPricingEras, DEFAULT_PRICING_SYNC_URL } from './pricing-eras.js'
 import { catalogInfo, setCatalogConfig } from './catalog.js'
 import { resolveRange, dayKey } from './time.js'
@@ -116,6 +116,9 @@ export function createServer(config, opts) {
       pricing: Object.assign(pricingStatus(db), {
         subscription: snap.subscription,
         subscriptionPlans: snap.subscriptionPlans || [],
+        // v1.4.2：法定节假日口径（官方把节假日全天计入闲时）。采集端据此自查
+        // 「我这边的峰谷判定与服务端重算是否同口径」。
+        peakHolidays: getPeakHolidays(config.peakHolidays),
       }),
       catalog: catalogInfo(db),
     })
