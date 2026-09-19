@@ -26,6 +26,7 @@ const FIXTURES = {
   health: { ok: true, serviceVersion: '1.0.0', syncVer: 1, uptimeMs: 1234567, lastIngestAt: NOW - 60000, db: { file: '/data/cost.db', userVersion: 1 } },
   config: {
     ok: true, timezone: 'Asia/Shanghai', todayKey: '2026-09-15', allowSelfRegister: true, deviceTokenSet: true,
+    deviceToken: 'dshc_fixture_shared_bootstrap_token_01',
     rateLimitPerMin: 120, maxBatchRecords: 2000, trustProxy: true, syncVer: 1, pricing: { source: 'builtin' },
   },
   prices: {
@@ -305,6 +306,16 @@ test('app.js: 各视图都渲染出真实数据（不是空壳）', async () => 
     const ok = await waitFor(() => title.test(root.textContent) && value.test(root.textContent))
     assert.ok(ok, '第 ' + (i + 1) + ' 个视图未渲染出预期内容：' + root.textContent.slice(0, 200))
   }
+})
+
+test('app.js: 设置页明文回显共享引导令牌（不再只说「已设置」）', async () => {
+  const { root } = dom
+  byClass(root, 'nav-item')[9].click() // 设置
+  assert.ok(await waitFor(() => /服务信息/.test(root.textContent)), '设置页应渲染')
+  const text = root.textContent
+  assert.match(text, /共享引导令牌dshc_fixture_shared_bootstrap_token_01/,
+    '设置页必须明文显示共享引导令牌；实际：' + (text.match(/共享引导令牌.{0,40}/) || [''])[0])
+  assert.doesNotMatch(text, /共享引导令牌未设置/, '已配置令牌时不得再显示「未设置」')
 })
 
 test('app.js: 概览的今日 / 本月 / 全部累计卡片读到切片金额（real 字段，不是 ¥0.0000）', async () => {

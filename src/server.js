@@ -371,7 +371,8 @@ export function createServer(config, opts) {
       ok: true,
       allowSelfRegister: config.allowSelfRegister === true,
       deviceTokenSet: Boolean(config.syncToken || getMeta(db, 'device_token', '')),
-      deviceToken: getMeta(db, 'device_token', ''),
+      // 设置页要能直接看到明文：库里有就用库里的，库里没有（手工写到 .env 的场景）回退到环境变量。
+      deviceToken: getMeta(db, 'device_token', '') || String(config.syncToken || ''),
       sessionTtlMs: config.adminSessionTtlMs,
       maxBatchRecords: config.maxBatchRecords,
       maxBodyBytes: config.maxBodyBytes,

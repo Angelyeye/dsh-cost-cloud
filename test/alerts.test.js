@@ -176,6 +176,8 @@ test('alerts: 订阅闲置 / 插件版本不一致 / 区间空数据', () => {
 test('alerts: 缺数据的上下文不炸，也不误报', () => {
   assert.deepEqual(computeAlerts({}), [], '空上下文应返回空数组')
   const half = computeAlerts({
+    now: NOW, // 必须钉住时间：否则 computeAlerts 回退到真实 Date.now()，
+              // 而 NOW 是固定基准，跑在 6 小时之后就会凭空多出 cloud-silent 告警
     health: { lastIngestAt: NOW - 1000 },
     syncHealth: { items: [] },
     overview: { range: '7d', summary: {} },

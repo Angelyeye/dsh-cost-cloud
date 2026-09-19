@@ -902,6 +902,29 @@ function viewRecords() {
 }
 
 // ---------- 设置 ----------
+
+// 共享引导令牌：明文回显 + 一键复制。
+// 此前只显示「已设置 / 未设置」，明文只存在于服务器 .env 与 SQLite，
+// 忘记令牌时只能登服务器翻文件或重新生成（会作废所有机器上正在用的旧令牌）。
+function tokenCell(c) {
+  const token = String(c.deviceToken || '')
+  if (!token) return el('span', {}, c.deviceTokenSet ? '已设置（明文不可读，请重新生成）' : '未设置')
+  const btn = el('button', { class: 'btn', style: { marginLeft: '8px', padding: '1px 8px', fontSize: '12px' } }, '复制')
+  btn.addEventListener('click', () => {
+    const nav = globalThis.navigator
+    try {
+      if (!nav || !nav.clipboard || typeof nav.clipboard.writeText !== 'function') throw new Error('no clipboard')
+      const p = nav.clipboard.writeText(token)
+      if (p && typeof p.then === 'function') p.then(() => { btn.textContent = '已复制' }, () => { btn.textContent = '选中后手动复制' })
+      else btn.textContent = '已复制'
+    } catch (e) { btn.textContent = '选中后手动复制' }
+  })
+  return el('span', {}, [
+    el('span', { class: 'mono', style: { wordBreak: 'break-all', userSelect: 'all' } }, token),
+    btn,
+  ])
+}
+
 function viewSettings() {
   const c = data.config
   const h = data.health
@@ -916,7 +939,7 @@ function viewSettings() {
       el('span', { class: 'k' }, '最近一次上报'), el('span', {}, h.lastIngestAt ? fmtAgo(h.lastIngestAt) : '—'),
       el('span', { class: 'k' }, '时区口径'), el('span', {}, c.timezone + '（今日 = ' + c.todayKey + '）'),
       el('span', { class: 'k' }, '设备自注册'), el('span', {}, c.allowSelfRegister ? el('span', { class: 'tag amber' }, '已开启') : '已关闭'),
-      el('span', { class: 'k' }, '共享引导令牌'), el('span', {}, c.deviceTokenSet ? '已设置' : '未设置'),
+      el('span', { class: 'k' }, '共享引导令牌'), tokenCell(c),
       el('span', { class: 'k' }, '上报限流'), el('span', {}, c.rateLimitPerMin + ' 次/分钟 · 单批上限 ' + c.maxBatchRecords + ' 条'),
       el('span', { class: 'k' }, '反代信任'), el('span', {}, c.trustProxy ? '信任 X-Forwarded-For' : '不信任（直连）'),
       el('span', { class: 'k' }, '单价表来源'), el('span', { class: 'mono' }, c.pricing.source),
