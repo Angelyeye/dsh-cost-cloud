@@ -9,8 +9,8 @@
   },
   "main": "src/server.js",
   "scripts": {
-    "start": "node --no-warnings src/server.js",
-    "serve": "node --no-warnings src/server.js",
+    "start": "node --no-warnings src/main.js start",
+    "serve": "node --no-warnings src/main.js start",
     "test": "node --no-warnings --test \"test/*.test.js\"",
     "test:pricing": "node --no-warnings scripts/check-pricing-sync.js",
     "hash-password": "node --no-warnings scripts/hash-password.js"
