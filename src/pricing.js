@@ -58,7 +58,7 @@ export const V41_EFFECTIVE_AT = Date.UTC(2026, 8, 10, 4, 0, 0)
 
 /** 与插件仓库 pricing.js 的 sha256 同源校验值（scripts/check-pricing-sync.js 比对）。
  *  由 scripts/sync-pricing-copy.js 自动重算；请勿手改。 */
-export const PRICING_SOURCE_HASH = 'sha256:4420f2df88d783f5'
+export const PRICING_SOURCE_HASH = 'sha256:3c339e5e8b745d4c'
 
 /**
  * V4.1 Flash 档的规范（官方现役）模型名。
@@ -180,7 +180,7 @@ export function setSyncedEras(eras) {
 /** 当前注入的同步时代（只读副本，供状态回显） */
 export function getSyncedEras() { return SYNCED_ERAS.slice() }
 
-// ---------- 手动覆盖价（v1.9.0，插件配置卡维护） ----------
+// ---------- 手动覆盖价（v1.9.0，配置面板维护） ----------
 let PRICE_OVERRIDES = new Map()
 function overrideKey(np, model) {
   return normalizeModelName(np) + '/' + normalizeModelName(model)
@@ -298,10 +298,14 @@ export const VOLCENGINE_PLAN_DEDICATED_PROVIDERS = [
 /**
  * 火山方舟 Coding Plan 覆盖的具体模型（原始名，归一化后匹配）。
  *
- * 带上实测见到的**日期/版本后缀**变体：方舟模型 id 普遍带后缀
- * （用户配置里就有 `glm-5-3-flash-260828`、`deepseek-v4-1-flash-260910`、
- * `doubao-seed-2-1-pro-260915`），漏配的后果是订阅调用被当成未知模型、
- * 标成「按量计费 · 价格为估算」——正是本次要修掉的那类误标。
+ * 清单按官方 2026-10 文档「Coding Plan 个人版快速开始」复核：可配置 Model Name
+ * 共 13 个（另有控制台托管的 ark-code-latest / Auto）。方舟模型 id 普遍带
+ * **6 位日期后缀**（`glm-5-3-flash-260828`、`deepseek-v4-1-flash-260910`、
+ * `doubao-seed-2-1-pro-260915`），故匹配时先剥掉该后缀再查表——否则泛
+ * volcengine 分支会把套餐内模型漏配成「按量计费 · 价格为估算」。
+ *
+ * 沿用旧清单的 9 个 id 未删：官方下线公告页本机取不到正文，删错会把仍在售的
+ * 套餐内模型误标按量；保留的代价只是极端情况下少算按量花费，方向更安全。
  */
 const VOLCENGINE_PLAN_MODEL_IDS = [
   'ark-code-latest',
@@ -311,15 +315,30 @@ const VOLCENGINE_PLAN_MODEL_IDS = [
   'doubao-seed-2.0-pro',
   'doubao-seed-2.0-lite',
   'doubao-seed-2.1-pro',
+  // 2026-10 官方清单新增：豆包 2.1 Lite / 2.0 Mini / 自动演进档
+  'doubao-seed-2.1-lite',
+  'doubao-seed-2.0-mini',
+  'doubao-seed-evolving',
   // 智谱（含用户配置里的 5.3 flash 带日期变体）
   'glm-4.7',
   'glm-5.1',
+  'glm-5.2',
+  'glm-5.3',
   'glm-5.3-flash',
+  // glm-latest 是官方给 glm-5.3 的别名，归一化后是另一个键，必须单独登记
+  'glm-latest',
   // Kimi / DeepSeek / MiniMax
   'kimi-k2.5',
+  // 2026-08 起方舟新增的 Kimi 档（原生侧叫 kimi-for-coding / k3 系）
+  'kimi-k2.8-preview',
+  'kimi-k3',
+  'kimi-k3.1-pro',
   'deepseek-v3.2',
   'deepseek-v4-pro',
   'deepseek-v4.1-flash',
+  // 2026-10 官方清单新增：经济档与旧名 V4-Flash
+  'deepseek-v4.1-flash-economy',
+  'deepseek-v4-flash',
   'minimax-m2.5',
 ]
 
@@ -355,6 +374,15 @@ export function volcenginePlanModels() {
 }
 
 /**
+ * 剥掉方舟模型 id 的 6 位日期后缀（归一化后的尾部 `\d{6}`）。
+ * 只用于火山白名单匹配，不改变全局 normalizeModelName 的语义。
+ * @param {string} n - 已归一化的模型名
+ */
+export function stripVolcDateSuffix(n) {
+  return String(n == null ? '' : n).replace(/\d{6}$/, '')
+}
+
+/**
  * 解析某次调用是否命中订阅套餐。
  * @param {string} np - 归一化 provider 名
  * @param {string} model - 模型名
@@ -375,17 +403,27 @@ export function subscriptionPlanFor(np, model) {
   if (VOLCENGINE_PLAN_PROVIDER_KEYS.indexOf(np) < 0) return null
   if (VOLCENGINE_PLAN_DEDICATED_PROVIDERS.indexOf(np) >= 0) return VOLC_PLAN_RATES
   const n = normalizeModelName(model)
-  if (volcModelIndex()[n] !== undefined) return VOLC_PLAN_RATES
+  const bare = stripVolcDateSuffix(n)
+  const idx = volcModelIndex()
+  if (idx[n] !== undefined || (bare !== n && idx[bare] !== undefined)) return VOLC_PLAN_RATES
   for (const p of VOLCENGINE_PLAN_MODEL_PREFIXES) {
-    if (n.startsWith(p)) return VOLC_PLAN_RATES
+    if (n.startsWith(p) || (bare !== n && bare.startsWith(p))) return VOLC_PLAN_RATES
   }
   return null
 }
 
-/** Provider 兜底单价（估算）；缓存写入按缓存命中价计。
- *  deepseek 兜底已同步至 V4.1 Flash 档（2.0/8.0/0.04），未知模型不再按旧价高估。 */
+/** DeepSeek 官方渠道的兜底单价（含峰谷 tiered）。
+ *  兜底已同步至 V4.1 Flash 档（2.0/8.0/0.04），未知模型不再按旧价高估。 */
+const DEEPSEEK_PROVIDER_RATES = { rates: { input: 2.0, output: 8.0, cacheRead: 0.04, cacheWrite: 0.04 }, tiered: true }
+
+/** Provider 兜底单价（估算）；缓存写入按缓存命中价计。 */
 export const PROVIDER_RATES = {
-  deepseek: { rates: { input: 2.0, output: 8.0, cacheRead: 0.04, cacheWrite: 0.04 }, tiered: true },
+  deepseek: DEEPSEEK_PROVIDER_RATES,
+  // DSH 0.2.x「DeepSeek 账号登录」的推理 provider 名是 `deepseek-account`
+  // （鉴权走 x-dsh-auth-token，模型与官方单价仍是同一套）。不登记它的话，
+  // 精确价表之外的模型会落到 GENERIC_RATES（缓存价 0.5 而非 0.04、且无峰谷半价），
+  // 账号态的新模型会被静默高估 —— 所以这里与 deepseek 共用同一份兜底价。
+  'deepseek-account': DEEPSEEK_PROVIDER_RATES,
   openai: { rates: { input: 10.0, output: 30.0, cacheRead: 5.0, cacheWrite: 5.0 }, tiered: false },
   anthropic: { rates: { input: 15.0, output: 75.0, cacheRead: 1.5, cacheWrite: 1.5 }, tiered: false },
   gemini: { rates: { input: 2.5, output: 10.0, cacheRead: 0.625, cacheWrite: 0.625 }, tiered: false },
@@ -416,7 +454,7 @@ export const VISION_IMAGE_MAX_TOKENS = 384
 //   · 2026 年：国办发明电〔2025〕7 号（2025-11-04 发布）
 //     https://www.gov.cn/zhengce/zhengceku/202511/content_7047091.htm
 // 调休补班的周六/周日**不计高峰**：定价规则只看「周一至周五」，调休不改变这一点。
-// 新一年度的安排通常在上一年 11 月公布，届时更新本表并随版本发布；也可在插件配置卡
+// 新一年度的安排通常在上一年 11 月公布，届时更新本表并随版本发布；也可在配置面板
 // 用 `peakHolidays` 覆盖（见 setPeakHolidays）。
 // ------------------------------------------------------------
 export const CN_HOLIDAYS = [
@@ -464,7 +502,7 @@ let PEAK_HOLIDAY_LIST = null
 let PEAK_HOLIDAY_SET = null // Set<string>（null 时按需从 CN_HOLIDAYS 构建）
 
 /**
- * 覆盖法定节假日列表（插件配置卡的「峰谷计价与提示」）。语义防呆：
+ * 覆盖法定节假日列表（配置面板的「峰谷计价与提示」）。语义防呆：
  *   · 传 null / undefined / ''  → 恢复内置表（默认）；config 里存空串即走这条；
  *   · 传 'none' / 'off' / '0'   → 显式停用（不排除任何节假日，等价于按「仅周末」计）；
  *   · 传数组或分隔字符串        → 用该列表**整体替换**内置表（不追加）；

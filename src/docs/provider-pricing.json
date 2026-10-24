@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-08-18",
-  "note": "Auto-generated from lib/pricing.js DEFAULT_PROVIDER_PRICE_TABLE. USD per 1M tokens; unpriced entries have no verified official price.",
+  "generatedAt": "2026-10-25",
+  "note": "USD per 1M tokens. Refreshed 2026-10-25 from vendor pricing pages (official first, OpenCode Console gateway when official page unreachable; per-entry sourceUrl/checkedAt kept for tracing). Unpriced entries have no verified official price.",
   "providers": {
     "openai": {
       "models": {
         "gpt-5.6-sol": {
-          "input": 5,
-          "cachedInput": 0.5,
-          "output": 30,
+          "input": 4,
+          "cachedInput": 0.4,
+          "output": 20,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/zen",
-          "checkedAt": "2026-08-17",
-          "notes": "≤272K 档;超过 272K 输入按 $10/$45 计;缓存写入 $6.25"
+          "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
+          "checkedAt": "2026-10-25",
+          "notes": "2026-10 降价(原 $5/$30);≤272K 档;超过 272K 按 $8/$30 计;缓存写入 $5"
         },
         "gpt-5.6-terra": {
           "input": 2,
@@ -190,6 +190,42 @@
           "cachedInput": 0.1,
           "output": 1.6,
           "billingMode": "flat"
+        },
+        "gpt-6-astra": {
+          "input": 10,
+          "cachedInput": 1,
+          "output": 50,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
+          "checkedAt": "2026-10-25",
+          "notes": "≤272K 档;超过 272K 按 $20/$75 计;缓存写入 $12.50(>272K $25);OpenRouter 端点交叉核对一致"
+        },
+        "gpt-6-sol": {
+          "input": 2,
+          "cachedInput": 0.2,
+          "output": 10,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
+          "checkedAt": "2026-10-25",
+          "notes": "≤272K 档;超过 272K 按 $4/$15 计;缓存写入 $2.50"
+        },
+        "gpt-6.1-sol": {
+          "input": 2,
+          "cachedInput": 0.1,
+          "output": 10,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
+          "checkedAt": "2026-10-25",
+          "notes": "≤272K 档;超过 272K 按 $4/$15 计;缓存写入 $2.50"
+        },
+        "gpt-6-luna": {
+          "input": 0.1,
+          "cachedInput": 0.01,
+          "output": 0.5,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
+          "checkedAt": "2026-10-25",
+          "notes": "≤272K 档;超过 272K 按 $0.20/$0.75 计;缓存写入 $0.125"
         }
       }
     },
@@ -250,9 +286,9 @@
           "cachedInput": 0.2,
           "output": 10,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/zen",
-          "checkedAt": "2026-08-17",
-          "notes": "早鸟价(至 2026-08-31);标准价 $3/$15"
+          "sourceUrl": "https://www.anthropic.com/claude/sonnet",
+          "checkedAt": "2026-10-25",
+          "notes": "官方 2026-08-10 公告:$2/$10 早鸟价已永久化($3/$15 不再生效);缓存写入 $2.50"
         },
         "claude-sonnet-4-6": {
           "input": 3,
@@ -276,6 +312,50 @@
           "output": 5,
           "billingMode": "flat",
           "notes": "缓存写入 $1.25"
+        },
+        "claude-fable-5-1": {
+          "input": 10,
+          "cachedInput": 0.25,
+          "output": 50,
+          "billingMode": "flat",
+          "sourceUrl": "https://www.anthropic.com/claude/fable",
+          "checkedAt": "2026-10-25",
+          "notes": "官方 2026-10:Fable 5.1;缓存读 $0.25(比 Fable 5 降 75%);缓存写入 $12.50"
+        },
+        "claude-mythos-5-1": {
+          "input": 10,
+          "output": 50,
+          "billingMode": "flat",
+          "sourceUrl": "https://www.anthropic.com/claude/mythos",
+          "checkedAt": "2026-10-25",
+          "notes": "官方:仅对受审核组织开放;缓存价未公布"
+        },
+        "claude-opus-5-5": {
+          "input": 4,
+          "cachedInput": 0.2,
+          "output": 20,
+          "billingMode": "flat",
+          "sourceUrl": "https://www.anthropic.com/claude/opus",
+          "checkedAt": "2026-10-25",
+          "notes": "官方 2026-10:比 Opus 5 便宜 20%;fast mode $8/$40;缓存写入 $5.00"
+        },
+        "claude-sonnet-5-5": {
+          "input": 2,
+          "cachedInput": 0.2,
+          "output": 10,
+          "billingMode": "flat",
+          "sourceUrl": "https://www.anthropic.com/claude/sonnet",
+          "checkedAt": "2026-10-25",
+          "notes": "官方 2026-10;缓存写入 $2.50"
+        },
+        "claude-haiku-5-5": {
+          "input": 0.1,
+          "cachedInput": 0.01,
+          "output": 0.5,
+          "billingMode": "flat",
+          "sourceUrl": "https://www.anthropic.com/claude/haiku",
+          "checkedAt": "2026-10-25",
+          "notes": "≤100K 档;超过 100K 按 $0.50/$2.50 计;缓存写入 $0.125"
         }
       }
     },
@@ -283,11 +363,12 @@
       "models": {
         "gemini-3.7-flash": {
           "input": 0.75,
+          "cachedInput": 0.075,
           "output": 3.75,
           "billingMode": "flat",
-          "sourceUrl": "https://ai.google.dev/gemini-api/docs/pricing",
-          "checkedAt": "2026-08-17",
-          "notes": "2026 年底前促销价;2027 起 $1.5/$7.5;Zen 网关按 $1.5/$7.5"
+          "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
+          "checkedAt": "2026-10-25",
+          "notes": "2026 年底前促销价(列表价 $1.5/$7.5);OpenCode 列 $1.50 而 OpenRouter 现价 $0.75,口径未核实"
         },
         "gemini-3.6-flash": {
           "input": 1.5,
@@ -353,6 +434,24 @@
           "billingMode": "flat",
           "sourceUrl": "https://ai.google.dev/gemini-api/docs/pricing",
           "checkedAt": "2026-08-17"
+        },
+        "gemini-4-argon": {
+          "input": 2,
+          "cachedInput": 0.1,
+          "output": 10,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
+          "checkedAt": "2026-10-25",
+          "notes": "列表价 $4/$20;2026-11-30 前 5 折促销;Google 官方定价页本机不可达,数值取自网关"
+        },
+        "gemini-3.8-flash": {
+          "input": 1.5,
+          "cachedInput": 0.15,
+          "output": 7.5,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
+          "checkedAt": "2026-10-25",
+          "notes": "网关列 $1.50/$7.50;OpenRouter 端点标 5 折现价 $0.75/$3.75;两源口径不一致,未核实"
         }
       }
     },
@@ -363,68 +462,112 @@
           "cachedInput": 0.3,
           "output": 15,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/zen",
-          "checkedAt": "2026-08-17",
-          "notes": "官方人民币价 ¥20/¥100/缓存¥2 每百万;此处为 Zen 网关美元价"
+          "sourceUrl": "https://www.kimi.ai/zh-hans/resources/kimi-k3-1-pro-pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "上一代旗舰;100 万上下文;官方 USD 价"
         },
         "kimi-k2.7-code": {
           "input": 0.95,
           "cachedInput": 0.19,
           "output": 4,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/go",
-          "checkedAt": "2026-08-17"
+          "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
+          "checkedAt": "2026-10-25",
+          "notes": "官方 API 价目页由前端渲染抓不到;值取自 OpenCode;Batch API 为标准价 60%"
         },
         "kimi-k2.6": {
           "input": 0.95,
           "cachedInput": 0.16,
           "output": 4,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/go",
-          "checkedAt": "2026-08-17"
+          "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
+          "checkedAt": "2026-10-25",
+          "notes": "官方 API 价目页抓不到;值取自 OpenCode;K2 系 2026-10-31 起停新注册、12 月底下线"
         },
         "kimi-k2.5": {
           "input": 0.6,
           "cachedInput": 0.1,
           "output": 3,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/zen",
-          "checkedAt": "2026-08-17",
-          "notes": "2026-08-05 起弃用"
+          "sourceUrl": "https://www.kimi.ai/zh-hans/resources/kimi-k3-1-pro-pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "官方已于 2026-08-31 下线(保留条目供历史记录核对);网关过渡期仍在售"
+        },
+        "kimi-k3.1-pro": {
+          "input": 2,
+          "cachedInput": 0.2,
+          "output": 10,
+          "billingMode": "flat",
+          "sourceUrl": "https://www.kimi.ai/zh-hans/resources/kimi-k3-1-pro-pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "2026-10-23 发布;100 万上下文全窗口统一价;缓存写入 5min $2.00 / 1h $4.00"
+        },
+        "kimi-k3.1-pro-highspeed": {
+          "input": 4,
+          "cachedInput": 0.2,
+          "output": 20,
+          "billingMode": "flat",
+          "sourceUrl": "https://www.kimi.ai/zh-hans/resources/kimi-k3-1-pro-pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "高速版:输入/输出/写入为 2 倍价,缓存读仍 $0.20"
         }
       }
     },
     "z-ai": {
       "models": {
         "glm-5.3": {
-          "unpriced": true,
+          "input": 1.4,
+          "cachedInput": 0.26,
+          "output": 4.4,
           "billingMode": "flat",
-          "notes": "OpenCode Go 目录在册;官方/Zen 均未公布单价,不编造价格"
+          "sourceUrl": "https://docs.z.ai/guides/overview/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "官方 Z.AI 已公布单价(原占位「未公布」作废);缓存存储限时免费"
         },
         "glm-5.2": {
           "input": 1.4,
           "cachedInput": 0.26,
           "output": 4.4,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/zen",
-          "checkedAt": "2026-08-17"
+          "sourceUrl": "https://docs.z.ai/guides/overview/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "官方价(2026-10 复核);Mistral 分销侧 2026-10-31 退休"
         },
         "glm-5.1": {
           "input": 1.4,
           "cachedInput": 0.26,
           "output": 4.4,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/zen",
-          "checkedAt": "2026-08-17"
+          "sourceUrl": "https://docs.z.ai/guides/overview/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "官方价(2026-10 复核)"
         },
         "glm-5": {
           "input": 1,
           "cachedInput": 0.2,
           "output": 3.2,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/zen",
-          "checkedAt": "2026-08-17",
-          "notes": "2026-05-14 起弃用"
+          "sourceUrl": "https://docs.z.ai/guides/overview/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "Z.AI 仍列价;OpenCode 标注 2026-05-14 弃用"
+        },
+        "glm-5.3-flash": {
+          "input": 0.15,
+          "cachedInput": 0.03,
+          "output": 0.5,
+          "billingMode": "flat",
+          "sourceUrl": "https://docs.z.ai/guides/overview/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "新品;网关另有 Free 变体限时免费"
+        },
+        "glm-5.3-flashx": {
+          "input": 0.37,
+          "cachedInput": 0.075,
+          "output": 1.25,
+          "billingMode": "flat",
+          "sourceUrl": "https://docs.z.ai/guides/overview/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "新品;FlashX-Legal 同价"
         }
       }
     },
@@ -435,32 +578,72 @@
           "cachedInput": 0.5,
           "output": 6,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/zen",
-          "checkedAt": "2026-08-17",
-          "notes": "≤200K 档;>200K 按 $4/$12 计"
+          "sourceUrl": "https://docs.x.ai/developers/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "≤200K 档;超过 200K 按 $4/$1/$12 计"
         },
         "grok-4.5": {
           "input": 2,
           "cachedInput": 0.3,
           "output": 6,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/zen",
-          "checkedAt": "2026-08-17",
-          "notes": "≤200K 档;>200K 按 $4/$12 计"
+          "sourceUrl": "https://docs.x.ai/developers/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "≤200K 档;超过 200K 按 $4/$0.60/$12 计"
         },
         "grok-4.3": {
           "input": 1.25,
+          "cachedInput": 0.2,
           "output": 2.5,
           "billingMode": "flat",
-          "sourceUrl": "https://docs.x.ai/developers/models/grok-4.3"
+          "sourceUrl": "https://docs.x.ai/developers/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "≤200K 档;超过 200K 按 $2.50/$0.40/$5.00 计;1M 上下文"
         },
         "grok-build-0.1": {
           "input": 1,
           "cachedInput": 0.2,
           "output": 2,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/zen",
-          "checkedAt": "2026-08-17"
+          "sourceUrl": "https://docs.x.ai/developers/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "256K 上下文;超过 200K 按 $2/$0.40/$4.00 计"
+        },
+        "grok-4.7": {
+          "input": 2,
+          "cachedInput": 0.5,
+          "output": 6,
+          "billingMode": "flat",
+          "sourceUrl": "https://docs.x.ai/developers/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "≤200K 档;超过 200K 按 $4/$1/$12 计;Batch -20%;Priority ×2"
+        },
+        "grok-4.20-0309-reasoning": {
+          "input": 1.25,
+          "cachedInput": 0.2,
+          "output": 2.5,
+          "billingMode": "flat",
+          "sourceUrl": "https://docs.x.ai/developers/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "≤200K 档;超过 200K 按 $2.50/$0.40/$5.00 计"
+        },
+        "grok-4.20-0309-non-reasoning": {
+          "input": 1.25,
+          "cachedInput": 0.2,
+          "output": 2.5,
+          "billingMode": "flat",
+          "sourceUrl": "https://docs.x.ai/developers/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "≤200K 档;超过 200K 按 $2.50/$0.40/$5.00 计"
+        },
+        "grok-4.20-multi-agent-0309": {
+          "input": 1.25,
+          "cachedInput": 0.2,
+          "output": 2.5,
+          "billingMode": "flat",
+          "sourceUrl": "https://docs.x.ai/developers/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "≤200K 档;超过 200K 按 $2.50/$0.40/$5.00 计"
         }
       }
     },
@@ -468,54 +651,65 @@
       "models": {
         "qwen3.8-max": {
           "input": 2,
-          "cachedInput": 0.25,
+          "cachedInput": 0.2,
           "output": 6,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/go",
-          "checkedAt": "2026-08-17",
-          "notes": "缓存写入 $2.50"
+          "sourceUrl": "https://www.alibabacloud.com/help/en/model-studio/model-pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "International(新加坡);缓存命中 = 输入价 10%;中国北京区更便宜($1.65/$4.951)"
         },
         "qwen3.7-max": {
           "input": 2.5,
-          "cachedInput": 0.5,
+          "cachedInput": 0.25,
           "output": 7.5,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/go",
-          "checkedAt": "2026-08-17",
-          "notes": "缓存写入 $3.125"
+          "sourceUrl": "https://www.alibabacloud.com/help/en/model-studio/model-pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "International;缓存命中 = 输入价 10%"
         },
         "qwen3.7-plus": {
           "input": 0.4,
           "cachedInput": 0.04,
           "output": 1.6,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/go",
-          "checkedAt": "2026-08-17",
-          "notes": "≤256K 档;>256K 按 $1.2/$4.8 计;缓存写入 $0.50"
+          "sourceUrl": "https://www.alibabacloud.com/help/en/model-studio/model-pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "International;≤256K 档,>256K 按 $1.20/$4.80 计;限时 20% off 标注"
         },
         "qwen3.6-plus": {
           "input": 0.5,
           "cachedInput": 0.05,
           "output": 3,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/go",
-          "checkedAt": "2026-08-17",
-          "notes": "≤256K 档;>256K 按 $2/$6 计;缓存写入 $0.625"
+          "sourceUrl": "https://www.alibabacloud.com/help/en/model-studio/model-pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "International 档;官方 Global 部署域更便宜($0.276/$1.651,>256K $1.101/$6.602)"
         },
         "qwen3.5-plus": {
           "input": 0.2,
           "cachedInput": 0.02,
           "output": 1.2,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/zen",
-          "checkedAt": "2026-08-17",
-          "notes": "缓存写入 $0.25"
+          "sourceUrl": "https://www.alibabacloud.com/help/en/model-studio/model-pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "International 档;官方 Global 部署域列 $0.115(≤128K)/$0.688,>256K $0.573/$3.44"
         },
         "qwen3-plus": {
           "input": 0.4,
           "output": 1.2,
           "billingMode": "flat",
-          "sourceUrl": "https://www.alibabacloud.com/help/en/model-studio/model-pricing"
+          "sourceUrl": "https://www.alibabacloud.com/help/en/model-studio/model-pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "官方价目页已不再列示该 id(疑似旧名),保留供历史匹配;新项目请用 qwen-plus / qwen3.x 系列"
+        },
+        "qwen3.8-flash": {
+          "input": 0.15,
+          "cachedInput": 0.015,
+          "output": 0.47,
+          "billingMode": "flat",
+          "sourceUrl": "https://www.alibabacloud.com/help/en/model-studio/model-pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "2026-10 新增;缓存命中按输入价 10%;网关注明 cachedWrite $0.20"
         }
       }
     },
@@ -526,44 +720,66 @@
           "cachedInput": 0.06,
           "output": 1.2,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/zen",
-          "checkedAt": "2026-08-17"
+          "sourceUrl": "https://platform.minimax.cn/docs/pricing/overview",
+          "checkedAt": "2026-10-25",
+          "notes": "官方人民币永久五折 ¥2.10/¥0.42/¥8.40(折算 0.292/0.058/1.167);>512K 档 ¥4.20/¥0.84/¥16.80;priority 档 ×1.5"
         },
         "minimax-m2.7": {
           "input": 0.3,
           "cachedInput": 0.06,
           "output": 1.2,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/zen",
-          "checkedAt": "2026-08-17"
+          "sourceUrl": "https://platform.minimax.cn/docs/pricing/overview",
+          "checkedAt": "2026-10-25",
+          "notes": "官方 2026-10 价目表已不列示(仅 M3/M3.1-Flash);网关仍在售,值取自网关"
         },
         "minimax-m2.5": {
           "input": 0.3,
           "cachedInput": 0.06,
           "output": 1.2,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/zen",
-          "checkedAt": "2026-08-17",
-          "notes": "2026-08-05 起弃用"
+          "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
+          "checkedAt": "2026-10-25",
+          "notes": "2026-08-05 已弃用(网关仍列价,过渡期)"
+        },
+        "minimax-m3.1-flash": {
+          "input": 0.139,
+          "cachedInput": 0.014,
+          "output": 0.556,
+          "billingMode": "flat",
+          "sourceUrl": "https://platform.minimax.cn/docs/pricing/overview",
+          "checkedAt": "2026-10-25",
+          "notes": "官方人民币 ¥1.00/¥0.10/¥4.00,按 7.2 折算;2026-10 新品"
         }
       }
     },
     "tencent": {
       "models": {
         "hunyuan-a13b": {
-          "input": 0.5,
-          "output": 2,
+          "input": 0.069,
+          "output": 0.278,
           "billingMode": "flat",
-          "notes": "Official price is CNY; catalog value requires currency conversion before use."
+          "sourceUrl": "https://cloud.tencent.com/document/product/1729/97731",
+          "checkedAt": "2026-10-25",
+          "notes": "原值为人民币刊例价 ¥0.50/¥2.00,现按 7.2 折算为美元口径;旧混元生文平台已停止新增模型"
         },
         "hy3": {
-          "input": 0.14,
+          "input": 0.139,
           "cachedInput": 0.035,
-          "output": 0.58,
+          "output": 0.556,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/go",
-          "checkedAt": "2026-08-17",
-          "notes": "OpenCode Go 目录价;厂商归属未官宣"
+          "sourceUrl": "https://cloud.tencent.com/document/product/1823/130055",
+          "checkedAt": "2026-10-25",
+          "notes": "官方 TokenHub 模型价格:¥1.00/¥0.25/¥4.00(广州在线推理),按 7.2 折算"
+        },
+        "hy4-preview": {
+          "input": 0.833,
+          "cachedInput": 0.042,
+          "output": 2.5,
+          "billingMode": "flat",
+          "sourceUrl": "https://cloud.tencent.com/document/product/1823/130055",
+          "checkedAt": "2026-10-25",
+          "notes": "官方 TokenHub:¥6.00/¥0.30/¥18.00,按 7.2 折算;新一代生产力模型"
         }
       }
     },
@@ -574,34 +790,76 @@
           "cachedInput": 0.0028,
           "output": 0.28,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/go",
-          "checkedAt": "2026-08-17"
+          "sourceUrl": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+          "checkedAt": "2026-10-25",
+          "notes": "2026-10-21 10:00(UTC+8)正式下线,模型名失效(保留条目供历史核对)"
         },
         "mimo-v2.5-pro": {
           "input": 0.435,
           "cachedInput": 0.003625,
           "output": 0.87,
           "billingMode": "flat",
-          "sourceUrl": "https://opencode.ai/docs/go",
-          "checkedAt": "2026-08-17"
+          "sourceUrl": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+          "checkedAt": "2026-10-25",
+          "notes": "2026-10-21 10:00(UTC+8)正式下线,模型名失效(保留条目供历史核对)"
+        },
+        "mimo-v2.6-pro": {
+          "input": 0.435,
+          "cachedInput": 0.0036,
+          "output": 0.87,
+          "billingMode": "flat",
+          "sourceUrl": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+          "checkedAt": "2026-10-25",
+          "notes": "海外价 $;国内 ¥3.00/¥0.025/¥6.00;Batch 半价"
+        },
+        "mimo-v2.6-flash": {
+          "input": 0.14,
+          "cachedInput": 0.0028,
+          "output": 0.28,
+          "billingMode": "flat",
+          "sourceUrl": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+          "checkedAt": "2026-10-25",
+          "notes": "国内 ¥1.00/¥0.02/¥2.00;Batch 半价"
+        },
+        "mimo-v2.6-pro-ultraspeed": {
+          "input": 4.35,
+          "cachedInput": 0.036,
+          "output": 8.7,
+          "billingMode": "flat",
+          "sourceUrl": "https://mimo.mi.com/docs/zh-CN/price/pay-as-you-go",
+          "checkedAt": "2026-10-25",
+          "notes": "国内 ¥30.00/¥0.25/¥60.00;不支持 batch"
         }
       }
     },
     "upstage": {
       "models": {
         "solar-pro4": {
-          "input": 0.3,
-          "cachedInput": 0.06,
-          "output": 1.2,
+          "input": 0.15,
+          "cachedInput": 0.03,
+          "output": 0.6,
           "billingMode": "flat",
-          "sourceUrl": "https://www.upstage.ai/pricing/api"
+          "sourceUrl": "https://www.upstage.ai/pricing/api",
+          "checkedAt": "2026-10-25",
+          "notes": "2026-10-20 起 5 折促销(标价 $0.30/$0.06/$1.20,截止日未公布)"
         },
         "solar-pro3": {
           "input": 0.15,
           "cachedInput": 0.015,
           "output": 0.6,
           "billingMode": "flat",
-          "sourceUrl": "https://www.upstage.ai/pricing/api"
+          "sourceUrl": "https://www.upstage.ai/pricing/api",
+          "checkedAt": "2026-10-25",
+          "notes": "2026-10-30(KST)停服(保留条目供历史核对)"
+        },
+        "solar-mini-4": {
+          "input": 0.1,
+          "cachedInput": 0.01,
+          "output": 0.4,
+          "billingMode": "flat",
+          "sourceUrl": "https://www.upstage.ai/pricing/api",
+          "checkedAt": "2026-10-25",
+          "notes": "2026-10-23 起回到标价(促销期曾 $0.03/$0.05)"
         }
       }
     },
@@ -610,7 +868,23 @@
         "nvidia/nemotron-3-ultra-550b-a55b": {
           "unpriced": true,
           "billingMode": "flat",
-          "notes": "Official catalog does not publish token price."
+          "sourceUrl": "https://build.nvidia.com/models",
+          "checkedAt": "2026-10-25",
+          "notes": "官方 API Catalog 未公布 token 单价,仅提供免费 trial;OpenCode 限时免费端点"
+        },
+        "nvidia/nemotron-3.5-lightning-30b-a3b": {
+          "unpriced": true,
+          "billingMode": "flat",
+          "sourceUrl": "https://build.nvidia.com/models",
+          "checkedAt": "2026-10-25",
+          "notes": "官方未公布 token 单价(1M 上下文,30B/A3B);OpenCode 限时免费端点"
+        },
+        "nvidia/nemotron-3.5-super-vl-120b-a12b": {
+          "unpriced": true,
+          "billingMode": "flat",
+          "sourceUrl": "https://build.nvidia.com/models",
+          "checkedAt": "2026-10-25",
+          "notes": "官方未公布 token 单价(120B/A12B 视觉语言);OpenCode 限时免费端点"
         }
       }
     },
@@ -620,19 +894,69 @@
           "input": 0.5,
           "cachedInput": 0.05,
           "output": 1.5,
-          "billingMode": "flat"
+          "billingMode": "flat",
+          "sourceUrl": "https://docs.mistral.ai/inference/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "GA;官方价表未列缓存价,缓存值未核实"
         },
         "mistral-medium-3.5": {
           "input": 1.5,
           "cachedInput": 0.15,
           "output": 7.5,
-          "billingMode": "flat"
+          "billingMode": "flat",
+          "sourceUrl": "https://docs.mistral.ai/inference/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "GA(API 名 mistral-medium-3-5);官方未列缓存价,缓存值未核实"
         },
         "mistral-small-4.0": {
           "input": 0.15,
           "cachedInput": 0.015,
           "output": 0.6,
-          "billingMode": "flat"
+          "billingMode": "flat",
+          "sourceUrl": "https://docs.mistral.ai/inference/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "GA;官方 API 名已改为 mistral-small-2603;官方未列缓存价,缓存值未核实"
+        },
+        "mistral-large-4": {
+          "input": 1.36,
+          "cachedInput": 0.14,
+          "output": 4.18,
+          "billingMode": "flat",
+          "sourceUrl": "https://docs.mistral.ai/inference/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "Public Preview(2026-10-06);官方三处材料均无 50% 促销字样,网关标 \"(50% off)\" 且未给截止日"
+        },
+        "mistral-small-2603": {
+          "input": 0.15,
+          "output": 0.6,
+          "billingMode": "flat",
+          "sourceUrl": "https://docs.mistral.ai/inference/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "原 mistral-small-4.0 的 API 名(官方 2026-10 更名);官方价表未列缓存价"
+        },
+        "ministral-14b-2512": {
+          "input": 0.2,
+          "output": 0.2,
+          "billingMode": "flat",
+          "sourceUrl": "https://docs.mistral.ai/inference/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "输入=输出同价;官方未列缓存价"
+        },
+        "ministral-8b-2512": {
+          "input": 0.15,
+          "output": 0.15,
+          "billingMode": "flat",
+          "sourceUrl": "https://docs.mistral.ai/inference/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "输入=输出同价;官方未列缓存价"
+        },
+        "ministral-3b-2512": {
+          "input": 0.1,
+          "output": 0.1,
+          "billingMode": "flat",
+          "sourceUrl": "https://docs.mistral.ai/inference/pricing",
+          "checkedAt": "2026-10-25",
+          "notes": "输入=输出同价;官方未列缓存价"
         }
       }
     },
@@ -647,9 +971,13 @@
           "checkedAt": "2026-08-17"
         },
         "glm-5.3": {
-          "unpriced": true,
+          "input": 1.4,
+          "cachedInput": 0.26,
+          "output": 4.4,
           "billingMode": "flat",
-          "notes": "Go 目录在册;官方未公布单价"
+          "sourceUrl": "https://opencode.ai/v2/docs/console/go",
+          "checkedAt": "2026-10-25",
+          "notes": "Go 档在线(:额度 $15);原占位「未公布」作废"
         },
         "glm-5.2": {
           "input": 1.4,
@@ -770,6 +1098,172 @@
           "billingMode": "flat",
           "sourceUrl": "https://opencode.ai/docs/go",
           "checkedAt": "2026-08-17"
+        },
+        "glm-5.3-flash": {
+          "input": 0.15,
+          "cachedInput": 0.03,
+          "output": 0.5,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/go",
+          "checkedAt": "2026-10-25",
+          "notes": "Go 档在线(额度 $60)"
+        },
+        "grok-4.7": {
+          "input": 2,
+          "cachedInput": 0.5,
+          "output": 6,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/go",
+          "checkedAt": "2026-10-25",
+          "notes": "Go 档在线(额度 $15);>200K 按 $4/$1/$12 计"
+        },
+        "gpt-6-luna": {
+          "input": 0.1,
+          "cachedInput": 0.01,
+          "output": 0.5,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/go",
+          "checkedAt": "2026-10-25",
+          "notes": "Go 档在线(额度 $15);>272K 按 $0.20/$0.02/$0.75 计"
+        },
+        "claude-haiku-5-5": {
+          "input": 0.1,
+          "cachedInput": 0.01,
+          "output": 0.5,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/go",
+          "checkedAt": "2026-10-25",
+          "notes": "Go 档在线(额度 $15);≤100K 档"
+        },
+        "gemini-4-argon": {
+          "input": 2,
+          "cachedInput": 0.1,
+          "output": 10,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/go",
+          "checkedAt": "2026-10-25",
+          "notes": "Go 档在线(额度 $30);50% 促销至 2026-11-30"
+        },
+        "kimi-k3.1-pro": {
+          "input": 2,
+          "cachedInput": 0.2,
+          "output": 10,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/go",
+          "checkedAt": "2026-10-25",
+          "notes": "Go 档在线(额度 $15)"
+        },
+        "longcat-2.0": {
+          "input": 0.3,
+          "cachedInput": 0.006,
+          "output": 1.2,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/go",
+          "checkedAt": "2026-10-25",
+          "notes": "美团 LongCat(Go 档额度 $60);LongCat 2.5 Preview 为限时免费"
+        },
+        "step-5-preview": {
+          "input": 1,
+          "cachedInput": 0.1,
+          "output": 2.7,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/go",
+          "checkedAt": "2026-10-25",
+          "notes": "Go 档在线(额度 $15)"
+        },
+        "mimo-v2.6-flash": {
+          "input": 0.14,
+          "cachedInput": 0.0028,
+          "output": 0.28,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/go",
+          "checkedAt": "2026-10-25",
+          "notes": "Go 档在线(额度 $60)"
+        },
+        "mimo-v2.6-pro": {
+          "input": 0.435,
+          "cachedInput": 0.003625,
+          "output": 0.87,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/go",
+          "checkedAt": "2026-10-25",
+          "notes": "Go 档在线(额度 $15)"
+        },
+        "minimax-m3.1-flash": {
+          "input": 0.15,
+          "cachedInput": 0.015,
+          "output": 0.6,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/go",
+          "checkedAt": "2026-10-25",
+          "notes": "Go 档在线(额度 $20)"
+        },
+        "qwen3.8-flash": {
+          "input": 0.15,
+          "cachedInput": 0.016,
+          "output": 0.47,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/go",
+          "checkedAt": "2026-10-25",
+          "notes": "Go 档在线(额度 $30)"
+        },
+        "deepseek-v4.1-flash": {
+          "input": 0.3,
+          "cachedInput": 0.006,
+          "output": 1.2,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/go",
+          "checkedAt": "2026-10-25",
+          "notes": "Go 档在线(额度 $80);闲时 $0.15/$0.003/$0.60 为高峰半价"
+        },
+        "deepseek-v4-pro": {
+          "input": 1.74,
+          "cachedInput": 0.145,
+          "output": 3.48,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/go",
+          "checkedAt": "2026-10-25",
+          "notes": "Go 档在线(额度 $15)"
+        },
+        "hy4-preview": {
+          "input": 0.834,
+          "cachedInput": 0.042,
+          "output": 2.501,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/go",
+          "checkedAt": "2026-10-25",
+          "notes": "Go 档在线(额度 $30)"
+        }
+      }
+    },
+    "meta": {
+      "models": {
+        "muse-wonder-1.0": {
+          "input": 4,
+          "cachedInput": 0.2,
+          "output": 20,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
+          "checkedAt": "2026-10-25",
+          "notes": "Meta Model API(dev.meta.ai);标准档"
+        },
+        "muse-spark-1.3": {
+          "input": 1.25,
+          "cachedInput": 0.15,
+          "output": 4.25,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
+          "checkedAt": "2026-10-25",
+          "notes": "Meta;另有 Contributor 训练授权折扣档 $0.10/$0.002/$0.20"
+        },
+        "muse-spark-1.2": {
+          "input": 1.25,
+          "cachedInput": 0.15,
+          "output": 4.25,
+          "billingMode": "flat",
+          "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
+          "checkedAt": "2026-10-25",
+          "notes": "Meta;另有 Contributor 训练授权折扣档 $0.10/$0.002/$0.20"
         }
       }
     }

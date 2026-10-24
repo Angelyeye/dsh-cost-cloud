@@ -204,8 +204,8 @@ curl -b cookie.txt -X POST https://cost.example.com/api/admin/pricing-eras/clear
 
 ### 多厂商模型价格目录
 
-`src/vendor-catalog.js` + `src/docs/provider-pricing.json`（与插件同源，14 家厂商
-/ 90 个模型条目，USD per 1M tokens）。内置表之外的模型（OpenAI / Anthropic /
+`src/vendor-catalog.js` + `src/docs/provider-pricing.json`（与插件同源，15 家厂商
+/ 141 个模型条目，USD per 1M tokens；2026-10-25 起按各厂商官方定价页逐条复核）。内置表之外的模型（OpenAI / Anthropic /
 Gemini / Qwen / Mistral / xAI …）按目录价计入，账户里记为**精确价**而不是「估算」，
 从而使云端与插件的算价口径一致、`cost_drift` 不再虚高。
 

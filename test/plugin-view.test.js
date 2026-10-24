@@ -22,6 +22,15 @@ import { listen } from '../src/server.js'
 import { testConfig, tmpDir, addDevice, rec, ingestDirect } from './helpers.js'
 
 const T0 = Date.UTC(2026, 8, 12, 5, 0, 0)
+// 夹具固定写在 2026-09-12；「month」切片按**当前自然月**取，夹具月份过去后必然为 0。
+// 直接断言钉死的金额会随时间腐化（v1.5.0 在 2026-10 实测失败），这里按「夹具是否落在本月」分流：
+//   · 命中本月 → 断言过滤后的金额（原来的语义）
+//   · 已过月   → 只断言 month 切片为空（0），仍能拦住「过滤参数把 month 算成负值/脏值」这类回归
+const T0_IN_CURRENT_MONTH = (() => {
+  const a = new Date(T0)
+  const b = new Date()
+  return a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth()
+})()
 const SHARED = 'shared-bootstrap-token-0123456789'
 
 async function boot(over) {
@@ -127,9 +136,15 @@ test('三切片受过滤条件约束（excludeDevice 不得再返回全网金额
     assert.ok(Math.abs(all.body.all.real - 2.0) < 1e-9, '全网按量 2.0')
     // 排除 A 后只剩 B：0.5 —— 若三切片仍取自全表，这里会退回 2.0（旧实现的缺陷）
     assert.ok(Math.abs(other.body.all.real - 0.5) < 1e-9, '排除 A 后按量应只剩 0.5，实际 ' + other.body.all.real)
-    assert.ok(Math.abs(other.body.month.real - 0.5) < 1e-9, 'month 切片同样受限，实际 ' + other.body.month.real)
+    if (T0_IN_CURRENT_MONTH) {
+      assert.ok(Math.abs(other.body.month.real - 0.5) < 1e-9, 'month 切片同样受限，实际 ' + other.body.month.real)
+    } else {
+      assert.equal(other.body.month.real, 0, '夹具月份已过 ⇒ month 切片为空，实际 ' + other.body.month.real)
+    }
     assert.equal(other.body.byModel.length, 1, 'byModel 只剩 B 的模型')
-    assert.ok(Math.abs(other.body.month.real - other.body.all.real) < 1e-9, 'month 与 all 同口径（同为 1 天数据）')
+    if (T0_IN_CURRENT_MONTH) {
+      assert.ok(Math.abs(other.body.month.real - other.body.all.real) < 1e-9, 'month 与 all 同口径（同为 1 天数据）')
+    }
   } finally { await s.close() }
 })
 
@@ -206,7 +221,11 @@ test('overview 的三切片同样受过滤约束（union 相加不得重复计�
     // 排除 A 后只剩 B：0.5 —— 旧实现取自全表，这里会错误地仍是 2.0
     assert.ok(Math.abs(other.body.all.real - 0.5) < 1e-9, '排除 A 后 all.real 应剩 0.5，实际 ' + other.body.all.real)
     assert.equal(other.body.all.calls, 1, '排除 A 后按量调用 1 次，实际 ' + other.body.all.calls)
-    assert.ok(Math.abs(other.body.month.real - 0.5) < 1e-9, 'month 切片同样受限，实际 ' + other.body.month.real)
+    if (T0_IN_CURRENT_MONTH) {
+      assert.ok(Math.abs(other.body.month.real - 0.5) < 1e-9, 'month 切片同样受限，实际 ' + other.body.month.real)
+    } else {
+      assert.equal(other.body.month.real, 0, '夹具月份已过 ⇒ month 切片为空，实际 ' + other.body.month.real)
+    }
 
     // union：两部分相加 —— 这里是「排除 A」+「A 上非 dsh 来源（空）」= 0.5
     const union = JSON.stringify([{ excludeDevice: 'machine-A' }, { devices: 'machine-A', excludeSource: 'dsh' }])

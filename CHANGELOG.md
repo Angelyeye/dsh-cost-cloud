@@ -3,6 +3,20 @@
 本服务是「多设备用量汇总 + 云端权威算价」的采集端服务。版本号与插件
 `@angelyeye/dsh-cost-tracker` 独立演进；两者通过 `syncVer` 契约与同源价格表协作。
 
+## 1.5.0
+
+**同源计价：跟随插件 v1.10.0 的模型目录刷新（15 家厂商 / 141 个条目），并补齐 v1.9.6 的 `deepseek-account` 兜底价**
+
+配套：`@angelyeye/dsh-cost-tracker` **v1.10.0**。
+
+- **多厂商目录同源刷新**：`src/docs/provider-pricing.json` 与 `src/vendor-catalog.js` 与插件**逐字节一致**，目录从 14 家 90 条扩到 **15 家 141 条**（新增 GPT-6 系列、Claude Fable 5.1 / Opus 5.5 / Sonnet 5.5 / Haiku 5.5、Gemini 4 Argon / 3.8 Flash、Kimi K3.1 Pro、GLM-5.3（原 unpriced → `$1.40/$4.40`）、Grok 4.7、Qwen3.8 Flash、MiniMax M3.1 Flash、混元 Hy4、MiMo v2.6、Mistral Large 4、Meta Muse 等），并修正混元 `hunyuan-a13b` 的人民币/美元口径错位。
+- **`src/pricing.js` 同源同步**（`PRICING_SOURCE_HASH = sha256:3c339e5e8b745d4c`）：
+  - 火山方舟 Coding Plan 模型白名单按官方 2026-10 清单复核并扩到 24 个 id（新增 `kimi-k3` / `kimi-k3.1-pro` / `kimi-k2.8-preview` / `deepseek-v4.1-flash-economy` / `glm-5.3` / `glm-latest` 等）；
+  - 新增 `stripVolcDateSuffix()`：泛 `volcengine` 分支下带 6 位日期后缀的模型 id（`glm-5-3-flash-260828` 等）不再漏配成按量；
+  - 补齐 `PROVIDER_RATES['deepseek-account']`（v1.9.6 的账号态兜底价）——此前云端副本落后一版，`scripts/check-pricing-sync.js` 的 `PROVIDER_RATES` / `PRICING_SOURCE_HASH` 两项一直是红的。
+- **校验**：`node scripts/check-pricing-sync.js` 全部各项一致（含逐字节同源、目录指纹、11 条计费抽样）；云端 `npm test` 全绿。
+- **顺带修掉测试腐化**：`test/plugin-view.test.js` 的两条「三切片受过滤约束」用例把「本月」切片金额钉死成 0.5，而夹具写在 2026-09-12 —— 进入 2026-10 后 month 切片必然为 0，测试恒红（与插件 v1.9.6 修过的同类时间炸弹同源）。现按「夹具是否落在当前自然月」分流：命中本月断言原金额，跨月只断言 month 切片为空，语义不降级且不再随时间腐化。
+
 ## 1.4.2
 
 **同源计价：跟随插件 v1.9.2（V4-Pro 不再路由到 Flash + 法定节假日全天闲时）**

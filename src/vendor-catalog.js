@@ -1,12 +1,13 @@
 // ============================================================
 // DSH 花费统计插件 —— 多厂商模型价格目录（纯逻辑，可独立测试）
 //
-// 数据来源：docs/provider-pricing.json —— 改编自 dsh-cost-meter（MIT License）
-// 的「已核对官方价格目录」（generatedAt 2026-08-18），保留每个条目的
-// sourceUrl / checkedAt 以便溯源；条目单价为 **USD / 1M tokens**。
+// 数据来源：docs/provider-pricing.json —— 初版改编自 dsh-cost-meter（MIT License）
+// 的「已核对官方价格目录」，2026-10-25 起按各厂商官方定价页逐条复核刷新
+// （官方页不可达时才用网关价并标注），保留每个条目的 sourceUrl / checkedAt
+// 以便溯源；条目单价为 **USD / 1M tokens**。
 //
 // 本插件账本恒以人民币（CNY）入账，因此目录价在计费时按 `catalogFxRate`
-// （默认 7.2，可在插件配置卡修改）折算为 CNY。缓存写入价沿用目录约定：
+// （默认 7.2，可在配置面板修改）折算为 CNY。缓存写入价沿用目录约定：
 // 与缓存命中价（cachedInput）同价。
 //
 // 匹配规则（catalogEntryFor）：
@@ -25,9 +26,9 @@ import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 
 export const CATALOG_META = {
-  generatedAt: '2026-08-18',
+  generatedAt: '2026-10-25',
   note: 'USD per 1M tokens; unpriced entries have no verified official price.',
-  origin: 'adapted from dsh-cost-meter docs/provider-pricing.json (MIT)',
+  origin: 'adapted from dsh-cost-meter docs/provider-pricing.json (MIT); refreshed from vendor pricing pages 2026-10-25',
 }
 
 /** 目录价 USD→CNY 默认汇率（可在配置中覆盖） */
@@ -53,6 +54,7 @@ export const PROVIDER_ALIASES = {
   upstage: 'upstage', solar: 'upstage',
   nvidia: 'nvidia', 'nvidia-nim': 'nvidia',
   mistral: 'mistral', mistralai: 'mistral',
+  meta: 'meta', 'meta-ai': 'meta', muse: 'meta',
   opencode: 'opencode-go', 'opencode-go': 'opencode-go', opencodego: 'opencode-go',
 }
 
