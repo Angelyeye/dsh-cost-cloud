@@ -146,6 +146,47 @@ export function catalogProviderKey(np) {
   return ''
 }
 
+/**
+ * v1.11.0：按**模型名**推断厂商目录键。
+ *
+ * 为什么需要：真实流量常走「中转站 / 聚合网关」（本机就是 `zhouhy-relay`、
+ * `muteki`、`sub.zhouhy.net` 这类名字），provider 名与厂商毫无关系。
+ * 这些 provider 在 catalogProviderKey 里查不到，于是所有模型都掉到
+ * 通用兜底价（2/8/0.5 CNY）——比官方价低约 6 倍，Fast 档也就永远不生效。
+ *
+ * 这里只做「前缀 -> 厂商」的确定性映射：模型名本身就带厂商标识
+ * （gpt- -> openai、claude- -> anthropic、gemini- -> google …）。
+ * 返回的键仍会走正常的命中流程，**推断不出具体条目就返回 null 回退兜底**，
+ * 因此不会给陌生模型乱安价格。
+ *
+ * @param {string} model
+ * @returns {string} 目录键，或 ''
+ */
+export function inferProviderFromModel(model) {
+  const m = String(model == null ? '' : model).toLowerCase()
+  if (!m) return ''
+  const RULES = [
+    [/^(gpt-|chatgpt-|o[134](?:-|$)|codex)/, 'openai'],
+    [/^claude/, 'anthropic'],
+    [/^(gemini|gemma|imagen)/, 'google'],
+    [/^(kimi|moonshot)/, 'moonshot'],
+    [/^(glm|zai-|z-ai)/, 'z-ai'],
+    [/^grok/, 'xai'],
+    [/^(qwen|qwq|qvq)/, 'alibaba'],
+    [/^minimax/, 'minimax'],
+    [/^(hy\d|hunyuan)/, 'tencent'],
+    [/^mimo/, 'xiaomi'],
+    [/^solar/, 'upstage'],
+    [/^nemotron/, 'nvidia'],
+    [/^(mistral|ministral|codestral|devstral|magistral)/, 'mistral'],
+    [/^muse/, 'meta'],
+  ]
+  for (const [re, pid] of RULES) {
+    if (re.test(m) && rawProviders()[pid]) return pid
+  }
+  return ''
+}
+
 function toRates(entry, fx) {
   const num = (v) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? n : 0 }
   const cache = num(entry.cachedInput)
@@ -206,7 +247,14 @@ export function catalogEntryFor(np, model, opts) {
   const mode = o.mode === 'exact' ? 'exact' : 'fuzzy'
   const fx = Number.isFinite(Number(o.fx)) && Number(o.fx) > 0 ? Number(o.fx) : CATALOG_FX_DEFAULT
   let pid = catalogProviderKey(np)
-  if (!pid) return null
+  // v1.11.0：中转站 / 聚合网关的 provider 名与厂商无关（如 zhouhy-relay），
+  // 按模型名前缀推断厂商；推断不出就照旧返回 null，落到 provider / 通用兜底。
+  let viaProvider = 'alias'
+  if (!pid) {
+    pid = inferProviderFromModel(model)
+    if (!pid) return null
+    viaProvider = 'model-inferred'
+  }
   const models = catalogIndex().get(pid)
   if (!models || models.size === 0) return null
   const n = normalizeModelName(model)
@@ -258,7 +306,7 @@ export function catalogEntryFor(np, model, opts) {
     checkedAt: String((fastEntry && hit.checkedAtFast) || hit.checkedAt || ''),
     notes: String(hit.notes || ''),
     fx,
-    via,
+    via: viaProvider === 'model-inferred' ? via + '+model-inferred' : via,
     serviceTier,
     tierPriceSource: fastEntry ? 'catalog-fast' : (wantFast ? 'standard-only' : 'standard'),
     ...(tierNote ? { tierNote } : {}),
