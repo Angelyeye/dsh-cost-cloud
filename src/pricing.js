@@ -58,7 +58,7 @@ export const V41_EFFECTIVE_AT = Date.UTC(2026, 8, 10, 4, 0, 0)
 
 /** 与插件仓库 pricing.js 的 sha256 同源校验值（scripts/check-pricing-sync.js 比对）。
  *  由 scripts/sync-pricing-copy.js 自动重算；请勿手改。 */
-export const PRICING_SOURCE_HASH = 'sha256:dd3bc941ad8b9aa5'
+export const PRICING_SOURCE_HASH = 'sha256:22d1497785aa7287'
 
 /**
  * V4.1 Flash 档的规范（官方现役）模型名。
@@ -135,6 +135,31 @@ function eraIndex(era) {
  * 某模型在指定时代下命中的**计费模型规范名**：先按别名表归一，再查本时代单价表，
  * 最后查路由表（路由目标须在本时代单价表内）；均未命中返回 null。
  */
+/** 尾部的版本/日期后缀：`-1017`（MMDD）、`-261017`（YYMMDD）、`-2026-09`（YYYY-MM） */
+const TRAILING_VERSION_RE = /-(?:\d{4}-\d{2}|\d{4}(?:\d{2})?)$/
+
+/**
+ * 去掉模型名尾部的版本后缀后再试一次。
+ *
+ * 真实流量里的模型 id 常带发布批次（`deepseek-v4.1-flash-1017`、
+ * `deepseek-v4-1-flash-261017`），而价表只有基础名。归一化后仍带数字尾巴，
+ * 就会错过精确价并掉到通用兜底（缓存读 0.5 vs 官方 0.04，差 12.5 倍）。
+ *
+ * 只对 deepseek 系生效：这些都是同一个模型的不同批次，价格一致；
+ * 其它厂商的尾号可能代表不同档位（如 gpt-5.4-mini），不能一概剥离。
+ *
+ * @param {string} model
+ * @returns {string[]} 依次尝试的候选名（不含原名）
+ */
+function suffixCandidates(model) {
+  const raw = String(model == null ? '' : model).toLowerCase()
+  if (!raw.startsWith('deepseek')) return []
+  const out = []
+  const m = raw.match(TRAILING_VERSION_RE)
+  if (m) out.push(raw.slice(0, m.index))
+  return out
+}
+
 export function resolveModelInEra(era, model) {
   if (!era) return null
   let n = normalizeModelName(model)
@@ -146,6 +171,18 @@ export function resolveModelInEra(era, model) {
   if (target) {
     const hit = idx.models.get(normalizeModelName(target))
     if (hit) return hit
+  }
+  // v1.11.0：带发布批次号的 deepseek 模型名，去掉尾部版本号再试（见 suffixCandidates）
+  for (const cand of suffixCandidates(model)) {
+    let c = normalizeModelName(cand)
+    if (!c) continue
+    if (MODEL_ALIASES[c]) c = normalizeModelName(MODEL_ALIASES[c])
+    if (idx.models.has(c)) return idx.models.get(c)
+    const t = idx.routes.get(c)
+    if (t) {
+      const hit = idx.models.get(normalizeModelName(t))
+      if (hit) return hit
+    }
   }
   return null
 }

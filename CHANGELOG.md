@@ -9,7 +9,7 @@
 
 配套：`@angelyeye/dsh-cost-tracker` **v1.11.0**。
 
-- **目录同源刷新**：`src/docs/provider-pricing.json`、`src/vendor-catalog.js`、`src/price-sync.js`、`src/pricing.js` 与插件重新逐字节同步；目录从 15 家 / 141 条扩到 **15 家 / 154 条**（新增 GPT-6.1 Terra、GPT-6 Rosalind / Cyber 系、GPT-6 Astra Law、Claude Fable 5.2 / Mythos 5.2、Gemini 4 Carbon / Hydrogen、Hy4、GLM-5.3-FlashX、Qwen4-Max-Preview（unpriced）；校正 Mistral Large 4、Grok 4.7、Claude Opus 5.5）。`PRICING_SOURCE_HASH` 重算为 `sha256:dd3bc941ad8b9aa5`。
+- **目录同源刷新**：`src/docs/provider-pricing.json`、`src/vendor-catalog.js`、`src/price-sync.js`、`src/pricing.js` 与插件重新逐字节同步；目录从 15 家 / 141 条扩到 **15 家 / 154 条**（新增 GPT-6.1 Terra、GPT-6 Rosalind / Cyber 系、GPT-6 Astra Law、Claude Fable 5.2 / Mythos 5.2、Gemini 4 Carbon / Hydrogen、Hy4、GLM-5.3-FlashX、Qwen4-Max-Preview（unpriced）；校正 Mistral Large 4、Grok 4.7、Claude Opus 5.5）。`PRICING_SOURCE_HASH` 重算为 `sha256:22d1497785aa7287`。
 - **汇率默认 7.2 → 6.67**：`catalog.js` 的缺省跟随 `CATALOG_FX_DEFAULT`；库里若残留历史默认 `catalog_fx_rate=7.2`（早期版本写入），首次读取时**迁移并写回 6.67**；管理员显式设置的其他值保持不动。
 - **GPT Fast 档重算**：新增 `ingest.tierOfMeta()`，按记录 `meta.serviceTier === 'fast'` 决定重算档位。`computeCostAt` 新增 `serviceTier` / `tokens` 支持，并返回 `serviceTier` 字段。插件 v1.11.0 会把 Fast 档写进 `meta`（≤1KB 契约内）随记录上报，云端因此与插件**同档同价**；旧客户端没有该标记时恒按 standard 重算，金额口径与 1.5.0 完全一致。
 - **长上下文分档**：目录条目新增 `longContext`（`inputTokensAbove` + 长档价）。`computeCostAt` 会把本次用量带进目录回调，输入侧 token 超过阈值（OpenAI 272K）时按整请求长档价计 —— 与插件侧同口径，避免「本地算长档、云端算短档」的 drift。
