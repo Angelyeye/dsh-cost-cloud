@@ -315,7 +315,12 @@ export function createIngest({ db, config, log }) {
       const priorTomb = db.prepare(`SELECT 1 AS x FROM tombstones WHERE device_id = ? AND source = ? AND agent_instance = ? AND dedup_key = ?`)
       for (const d of details) {
         const dk = dedupKeyOfDetail(d, { resetEpoch: env.resetEpoch })
-        const calc = computeCostAt(d.provider, d.model, d.ts, d.tokens, catOpts)
+        // v1.11.0：插件把服务档位写进 meta.serviceTier；云端据此按 Fast 价重算，
+        // 才能与插件侧入账口径一致（旧客户端没有该标记 → 恒 standard，行为不变）
+        const recTier = tierOfMeta(d.meta)
+        const calc = computeCostAt(d.provider, d.model, d.ts, d.tokens, recTier === 'fast'
+          ? Object.assign({}, catOpts || {}, { serviceTier: 'fast' })
+          : catOpts)
         const picked = resolveCost('detail', d.deviceCost, calc.cost, d.subscription || calc.subscription, d.estimated || calc.estimated)
         const seg = calc.period === 'peak' ? 'peak' : calc.period === 'off-peak' ? 'off' : 'flat'
         const res = insRec.run(
@@ -465,4 +470,20 @@ export function createIngest({ db, config, log }) {
   }
 
   return { ingestRecords, ingestRollups, ingestTombstone, watermarkOf, ensureDeviceSource, registerDevice: (o) => registerDevice(db, o) }
+}
+
+/**
+ * 从入库记录的 meta JSON 里读服务档位（v1.11.0）。
+ * 只认 `serviceTier === 'fast'`；缺失 / 非法 / 旧客户端一律视为 standard。
+ * @param {string|object|null|undefined} meta - 记录 meta（DB 里是 JSON 文本）
+ * @returns {'fast'|'standard'}
+ */
+export function tierOfMeta(meta) {
+  if (!meta) return 'standard'
+  let obj = meta
+  if (typeof meta === 'string') {
+    try { obj = JSON.parse(meta) } catch { return 'standard' }
+  }
+  if (!obj || typeof obj !== 'object') return 'standard'
+  return String(obj.serviceTier || '').toLowerCase() === 'fast' ? 'fast' : 'standard'
 }

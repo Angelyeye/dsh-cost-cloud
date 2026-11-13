@@ -3,6 +3,22 @@
 本服务是「多设备用量汇总 + 云端权威算价」的采集端服务。版本号与插件
 `@angelyeye/dsh-cost-tracker` 独立演进；两者通过 `syncVer` 契约与同源价格表协作。
 
+## 1.6.0
+
+**跟随插件 v1.11.0：目录汇率改 6.67 · 支持 GPT Fast 档重算 · 长上下文分档 · 看板 token 中文单位**
+
+配套：`@angelyeye/dsh-cost-tracker` **v1.11.0**。
+
+- **目录同源刷新**：`src/docs/provider-pricing.json`、`src/vendor-catalog.js`、`src/price-sync.js`、`src/pricing.js` 与插件重新逐字节同步；目录从 15 家 / 141 条扩到 **16 家 / 155 条**（新增 GPT-6.1 Terra、GPT-6 Rosalind / Cyber 系、GPT-6 Astra Law、Claude Fable 5.2 / Mythos 5.2、Gemini 4 Carbon / Hydrogen、Hy4、GLM-5.3-FlashX、Qwen4-Max-Preview（unpriced）；校正 Mistral Large 4、Grok 4.7、Claude Opus 5.5）。`PRICING_SOURCE_HASH` 重算为 `sha256:dd3bc941ad8b9aa5`。
+- **汇率默认 7.2 → 6.67**：`catalog.js` 的缺省跟随 `CATALOG_FX_DEFAULT`；库里若残留历史默认 `catalog_fx_rate=7.2`（早期版本写入），首次读取时**迁移并写回 6.67**；管理员显式设置的其他值保持不动。
+- **GPT Fast 档重算**：新增 `ingest.tierOfMeta()`，按记录 `meta.serviceTier === 'fast'` 决定重算档位。`computeCostAt` 新增 `serviceTier` / `tokens` 支持，并返回 `serviceTier` 字段。插件 v1.11.0 会把 Fast 档写进 `meta`（≤1KB 契约内）随记录上报，云端因此与插件**同档同价**；旧客户端没有该标记时恒按 standard 重算，金额口径与 1.5.0 完全一致。
+- **长上下文分档**：目录条目新增 `longContext`（`inputTokensAbove` + 长档价）。`computeCostAt` 会把本次用量带进目录回调，输入侧 token 超过阈值（OpenAI 272K）时按整请求长档价计 —— 与插件侧同口径，避免「本地算长档、云端算短档」的 drift。
+- **独立缓存写价**：`computeCost` 支持 `cacheWrite` 与 `cacheRead` 分开计价（OpenAI / Anthropic 写价高于读价）；未提供写价时沿用读价，DeepSeek 等读写同价模型结果不变。
+- **看板 token 中文单位**：`web/state.js` 的 `fmtTokens` 改为 `9,300` / `31.4万` / `1.5亿`（与插件 `token-format.js` 同规则），`web/app.js` / `web/views.js` 去掉英文 ` tokens` 后缀，列标题统一为「Token」。
+- **目录状态回显**：`catalogInfo` 新增 `fastTierModelCount`（与插件同源数据算出的可区分档位模型数），`/api/v1/protocol` 可直接核对两侧是否同源。
+- **协议兼容**：`syncVer` 仍为 1；`meta` 本就是可选字段，未知 meta 被忽略，旧插件与新服务端、新插件与旧服务端均可互通。
+- **测试**：新增 `test/v11-fast-tier.test.js`（汇率迁移 / `tierOfMeta` / Fast 计价 / 无 Fast 报价不加价 / 目录回显 / 中文单位，6 项）；`test/pricing-sync.test.js` 补长上下文与 Fast 断言。云端 18 个测试文件全部通过，`check-pricing-sync.js` 全绿。
+
 ## 1.5.0
 
 **同源计价：跟随插件 v1.10.0 的模型目录刷新（15 家厂商 / 141 个条目），并补齐 v1.9.6 的 `deepseek-account` 兜底价**

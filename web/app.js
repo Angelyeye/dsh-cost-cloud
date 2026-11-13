@@ -234,7 +234,7 @@ function viewControl() {
     return el('div', { class: 'btn-group' }, ['cost', 'tokens', 'calls'].map((k) => el('button', {
       class: state.matrixMetric === k ? 'on' : '',
       onClick: () => { setState({ matrixMetric: k }); render() },
-    }, k === 'cost' ? '花费' : k === 'tokens' ? 'Tokens' : '调用')))
+    }, k === 'cost' ? '花费' : k === 'tokens' ? 'Token' : '调用')))
   }
   if (state.view === 'heatmap') {
     return el('span', { class: 'row', style: { gap: '6px' } }, [
@@ -355,13 +355,13 @@ function viewOverview() {
     },
     {
       title: '订阅等效（参考）', value: '¥' + fmtMoney(s.subEquivalent),
-      sub: fmtInt(s.subCalls) + ' 次 · ' + fmtTokens(s.subTokens) + ' tokens',
+      sub: fmtInt(s.subCalls) + ' 次 · ' + fmtTokens(s.subTokens),
       tag: '订阅', tagKind: 'green',
       delta: prevDelta(s.subEquivalent, s.prevSubCost),
     },
     {
-      title: '区间调用 / Tokens', value: fmtInt(s.realCalls),
-      sub: fmtTokens(s.realTokens) + ' tokens',
+      title: '区间调用 / Token', value: fmtInt(s.realCalls),
+      sub: fmtTokens(s.realTokens),
       delta: prevDelta(s.realCalls, s.prevRealCalls), invert: false,
     },
     { title: '缓存命中率', value: hitRate.toFixed(1) + '%', sub: '命中 ' + fmtTokens(s.cacheRead) + ' / 未命中 ' + fmtTokens(s.input) },
@@ -392,7 +392,7 @@ function viewOverview() {
         { key: 'source', label: 'Agent', render: (r) => sourceDot(r.source, o.sources.map((x) => x.source)) },
         { key: 'cost', label: '花费 (CNY)', num: true, render: (r) => '¥' + fmtMoney(r.cost) },
         { key: 'calls', label: '调用', num: true, render: (r) => fmtInt(r.calls) },
-        { key: 'tokens', label: 'Tokens', num: true, render: (r) => fmtTokens(r.tokens) },
+        { key: 'tokens', label: 'Token', num: true, render: (r) => fmtTokens(r.tokens) },
         { key: 'devices', label: '来自设备', render: (r) => r.devices.length + ' 台' },
         { key: 'share', label: '占比', num: true, render: (r) => fmtPct(s.cost > 0 ? r.cost / s.cost : 0) },
       ], o.sources.map((r) => Object.assign({}, r, { __click: () => { setState({ view: 'records', filterSources: [r.source], recordsCursor: 0 }); go('records') } })))
@@ -418,7 +418,7 @@ function deviceTable(list, viewId) {
     { key: 'sources', label: 'Agent', render: (r) => el('div', { class: 'row', style: { gap: '4px' } }, (r.sources || []).map((x) => el('span', { class: 'tag' }, x))) },
     { key: 'cost', label: '花费 (CNY)', num: true, render: (r) => '¥' + fmtMoney(r.cost) },
     { key: 'calls', label: '调用', num: true, render: (r) => fmtInt(r.calls) },
-    { key: 'tokens', label: 'Tokens', num: true, render: (r) => fmtTokens(r.tokens) },
+    { key: 'tokens', label: 'Token', num: true, render: (r) => fmtTokens(r.tokens) },
   ], list.map((r) => Object.assign({}, r, {
     __click: () => { setState({ filterDevices: [r.device], view: 'trend' }); go('trend') },
   })))
@@ -499,8 +499,8 @@ function viewSubscriptions() {
       sub: '窗口 ' + sub.fromKey + ' → ' + sub.toKey + ' · 占总花费 ' + fmtPct(t.subShare) + '（按套餐单价折算，不是实际扣费）',
       tag: t.planCount + ' 个套餐', tagKind: 'green',
     },
-    { title: '订阅调用', value: fmtInt(t.subCalls), sub: fmtTokens(t.subTokens) + ' tokens' },
-    { title: '按量花费', value: '¥' + fmtMoney(t.realCost), sub: fmtInt(t.realCalls) + ' 次 · ' + fmtTokens(t.realTokens) + ' tokens' },
+    { title: '订阅调用', value: fmtInt(t.subCalls), sub: fmtTokens(t.subTokens) },
+    { title: '按量花费', value: '¥' + fmtMoney(t.realCost), sub: fmtInt(t.realCalls) + ' 次 · ' + fmtTokens(t.realTokens) },
     {
       title: '窗口总花费', value: '¥' + fmtMoney(t.cost),
       sub: '按量 + 订阅等效；两者口径互不混入',
@@ -539,7 +539,7 @@ function viewSubscriptions() {
       { key: 'cost', label: '等效费用', num: true, render: (r) => '¥' + fmtMoney(r.cost) },
       { key: 'share', label: '订阅占比', num: true, render: (r) => fmtPct(r.share) },
       { key: 'calls', label: '调用', num: true, render: (r) => fmtInt(r.calls) },
-      { key: 'tokens', label: 'Tokens', num: true, render: (r) => fmtTokens(r.tokens) },
+      { key: 'tokens', label: 'Token', num: true, render: (r) => fmtTokens(r.tokens) },
       { key: 'avgPerActiveDay', label: '活跃日均', num: true, render: (r) => '¥' + fmtMoney(r.avgPerActiveDay) },
       { key: 'activeDays', label: '使用天数', num: true, render: (r) => fmtInt(r.activeDays) },
       { key: 'firstDay', label: '首次', render: (r) => r.firstDay || '—' },
@@ -570,7 +570,7 @@ function viewSubscriptions() {
         { key: 'realCost', label: '按量', num: true, render: (r) => '¥' + fmtMoney(r.realCost) },
         { key: 'cost', label: '合计', num: true, render: (r) => '¥' + fmtMoney(r.cost) },
         { key: 'subCalls', label: '订阅调用', num: true, render: (r) => fmtInt(r.subCalls) },
-        { key: 'subTokens', label: '订阅 Tokens', num: true, render: (r) => fmtTokens(r.subTokens) },
+        { key: 'subTokens', label: '订阅 Token', num: true, render: (r) => fmtTokens(r.subTokens) },
       ], sub.byMonth) : el('div', { class: 'hint' }, '暂无数据')),
   ]))
 
@@ -605,7 +605,7 @@ function viewSubscriptions() {
         { key: 'source', label: 'Agent', render: (r) => el('span', { class: 'tag blue' }, r.source) },
         { key: 'model', label: '模型', render: (r) => el('span', { class: 'mono' }, r.provider + '/' + r.model) },
         { key: 'calls', label: '次数', num: true, render: (r) => fmtInt(r.calls) },
-        { key: 'tokens', label: 'Tokens', num: true, render: (r) => fmtTokens(r.tokens) },
+        { key: 'tokens', label: 'Token', num: true, render: (r) => fmtTokens(r.tokens) },
         { key: 'cost', label: '等效', num: true, render: (r) => '¥' + fmtMoney(r.cost, 4) },
       ], sub.recent) : el('div', { class: 'hint' }, '暂无订阅记录')),
   ]))
@@ -858,7 +858,7 @@ function viewModels() {
         { key: 'input', label: '输入', num: true, render: (r) => fmtTokens(r.input) },
         { key: 'cacheRead', label: '缓存命中', num: true, render: (r) => fmtTokens(r.cacheRead) },
         { key: 'output', label: '输出', num: true, render: (r) => fmtTokens(r.output) },
-        { key: 'tokens', label: 'Tokens', num: true, render: (r) => fmtTokens(r.tokens) },
+        { key: 'tokens', label: 'Token', num: true, render: (r) => fmtTokens(r.tokens) },
         { key: 'cost', label: '花费', num: true, render: (r) => '¥' + fmtMoney(r.cost) },
         { key: 'share', label: '占比', num: true, render: (r) => fmtPct(total > 0 ? r.cost / total : 0) },
         { key: 'driftAbs', label: '漂移', num: true, render: (r) => (r.driftAbs > 0.01 ? el('span', { class: 'tag amber' }, '¥' + fmtMoney(r.driftAbs)) : '0') },
@@ -867,7 +867,7 @@ function viewModels() {
       roll.length ? table([
         { key: 'model', label: '模型' },
         { key: 'calls', label: '调用', num: true, render: (r) => fmtInt(r.calls) },
-        { key: 'tokens', label: 'Tokens', num: true, render: (r) => fmtTokens(r.tokens) },
+        { key: 'tokens', label: 'Token', num: true, render: (r) => fmtTokens(r.tokens) },
         { key: 'cost', label: '花费', num: true, render: (r) => '¥' + fmtMoney(r.cost) },
       ], roll) : el('div', { class: 'hint' }, '暂无历史日汇总（明细仍在保留窗口内）')),
   ])

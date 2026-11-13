@@ -58,7 +58,7 @@ export const V41_EFFECTIVE_AT = Date.UTC(2026, 8, 10, 4, 0, 0)
 
 /** 与插件仓库 pricing.js 的 sha256 同源校验值（scripts/check-pricing-sync.js 比对）。
  *  由 scripts/sync-pricing-copy.js 自动重算；请勿手改。 */
-export const PRICING_SOURCE_HASH = 'sha256:3c339e5e8b745d4c'
+export const PRICING_SOURCE_HASH = 'sha256:dd3bc941ad8b9aa5'
 
 /**
  * V4.1 Flash 档的规范（官方现役）模型名。
@@ -652,11 +652,13 @@ export function peakPhaseAt(ts, spanDays) {
  * @param {string} model - 模型名（如 deepseek-v4-flash-vision-exp）
  * @param {number} [ts] - 调用发生时刻（epoch ms）；决定用哪一版单价表。
  *   缺省用当前时间——注意历史/测试场景应显式传入，否则跨价格时代会错。
- * @param {{catalog?:Function, overrides?:Map, planOverrides?:object}} [opts]
- *   · catalog(np, model) → 目录命中对象 | null（vendor-catalog.catalogEntryFor，
- *     由调用方注入以保持本模块可独立测试）；
+ * @param {{catalog?:Function, overrides?:Map, planOverrides?:object,
+ *          serviceTier?:'standard'|'fast', tokens?:object}} [opts]
+ *   · catalog(np, model, extra) → 目录命中对象 | null（vendor-catalog.catalogEntryFor，
+ *     由调用方注入以保持本模块可独立测试；extra 携带 serviceTier 与 tokens 供 Fast/长档定价）；
  *   · overrides：setPriceOverrides 注入的手动覆盖价（不传则用模块态）；
- *   · planOverrides：订阅归类覆盖 {'provider/model'|'provider/*': 'plan'|'api'}。
+ *   · planOverrides：订阅归类覆盖 {'provider/model'|'provider/*': 'plan'|'api'}；
+ *   · serviceTier / tokens：v1.11.0 起用于 GPT Fast 档与长上下文分档。
  * @returns {{rates:object, tiered:boolean, estimated:boolean, subscription:boolean,
  *            model:string, era:string|null, source:string}}
  *   model 为**计费模型规范名**：命中路由时是被路由到的模型（如 V4-Pro → V4.1 Flash），
@@ -710,8 +712,18 @@ function resolveNonPlanPrice(np, model, ts, o) {
   if (exact) return { rates: era.models[exact], tiered: true, estimated: false, subscription: false, model: exact, era: era.id, source: era.synced ? 'synced' : 'exact' }
   if (typeof o.catalog === 'function') {
     try {
-      const c = o.catalog(np, model)
-      if (c && c.rates) return { rates: c.rates, tiered: false, estimated: false, subscription: false, model, era: era.id, source: 'catalog', catalog: { provider: c.provider, sourceUrl: c.sourceUrl || '', checkedAt: c.checkedAt || '', via: c.via || '' } }
+      // v1.11.0：把服务档位与本次用量一并交给目录层（Fast 档价 + 长上下文分档）
+      const c = o.catalog(np, model, { serviceTier: o.serviceTier, tokens: o.tokens })
+      if (c && c.rates) {
+        return {
+          rates: c.rates, tiered: false, estimated: false, subscription: false, model, era: era.id, source: 'catalog',
+          catalog: {
+            provider: c.provider, sourceUrl: c.sourceUrl || '', checkedAt: c.checkedAt || '', via: c.via || '',
+            serviceTier: c.serviceTier || 'standard', tierPriceSource: c.tierPriceSource || '', contextTier: c.contextTier || 'short',
+            ...(c.tierNote ? { tierNote: c.tierNote } : {}),
+          },
+        }
+      }
     } catch (e) { /* 目录读取失败不阻断计费，落到 provider 兜底 */ }
   }
   const p = PROVIDER_RATES[np]
@@ -722,7 +734,8 @@ function resolveNonPlanPrice(np, model, ts, o) {
 /**
  * 计算一次调用的费用（CNY）。
  * @param {object} rates - {input, output, cacheRead, cacheWrite, reasoning?}（CNY / 1M tokens）
- *   cacheRead 与 cacheWrite 同价（均为缓存命中价），输入用未命中价，reasoning 缺省 0。
+ *   输入用未命中价；cacheRead 为缓存命中价；cacheWrite 为缓存写入价
+ *   （v1.11.0 起可独立给出，缺省与旧行为一致 = 与 cacheRead 同价）；reasoning 缺省 0。
  * @param {boolean} tiered - 是否峰谷计价（false 时按表内价）
  * @param {boolean} peak - 是否高峰时段（tiered 且非高峰时 ×0.5）
  * @param {{input:number, output:number, cacheRead:number, cacheWrite:number, reasoning?:number}} t - token 用量
@@ -730,7 +743,12 @@ function resolveNonPlanPrice(np, model, ts, o) {
 export function computeCost(rates, tiered, peak, t) {
   const f = tiered && !peak ? 0.5 : 1
   const reasoning = toNum(t.reasoning) * (toNum(rates.reasoning))
-  return (t.input * rates.input + t.output * rates.output + (t.cacheRead + t.cacheWrite) * rates.cacheRead + reasoning) * f / 1000000
+  // v1.11.0：缓存读与缓存写分开计价（OpenAI/Anthropic 写价比读价高）；
+  // 未提供 cacheWrite 时沿用缓存读价，DeepSeek 等读写同价模型的结果完全不变。
+  const writePrice = rates.cacheWrite === undefined ? toNum(rates.cacheRead) : toNum(rates.cacheWrite)
+  return (t.input * toNum(rates.input) + t.output * toNum(rates.output)
+    + t.cacheRead * toNum(rates.cacheRead) + t.cacheWrite * writePrice
+    + reasoning) * f / 1000000
 }
 
 function toNum(x) { const n = Number(x); return isNaN(n) ? 0 : n }
@@ -788,15 +806,20 @@ export function normalizeProvider(p) {
  * @param {string} model - 上报的模型名
  * @param {number} ts - 调用时刻（epoch ms）
  * @param {object} tokens - 已归一化的 token 桶
- * @param {{catalog?:Function, overrides?:Map, planOverrides?:object}} [opts]
- * @returns {{cost:number, model:string, period:string, estimated:boolean, subscription:boolean, era:string|null, source:string}}
+ * @param {{catalog?:Function, overrides?:Map, planOverrides?:object,
+ *          serviceTier?:'standard'|'fast', tokens?:object}} [opts]
+ *   v1.11.0：serviceTier / tokens 供 GPT Fast 档与长上下文分档使用（与插件同口径）。
+ * @returns {{cost:number, model:string, period:string, estimated:boolean, subscription:boolean, era:string|null, source:string, serviceTier:string}}
  */
 export function computeCostAt(provider, model, ts, tokens, opts) {
   const np = normalizeProvider(provider)
-  const price = priceFor(np, model, ts, opts)
+  // 目录回调需要按「本次用量」判长上下文，把 tokens 一并传给 opts（不改调用方对象）
+  const o = opts ? Object.assign({}, opts, { tokens: opts.tokens || tokens }) : opts
+  const price = priceFor(np, model, ts, o)
   const peak = isPeak(ts)
   const tiered = price.tiered === true
   const cost = computeCost(price.rates, tiered, peak, tokens)
+  const catalog = price.catalog || {}
   return {
     cost: r6(cost),
     model: price.model || model,
@@ -805,6 +828,8 @@ export function computeCostAt(provider, model, ts, tokens, opts) {
     subscription: price.subscription === true,
     era: price.era === null ? null : price.era,
     source: price.source || '',
+    // v1.11.0：记录所属服务档位（无档位信息时恒 standard，与旧记录口径一致）
+    serviceTier: catalog.serviceTier === 'fast' || (o && o.serviceTier === 'fast') ? 'fast' : 'standard',
   }
 }
 

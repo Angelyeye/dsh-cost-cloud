@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-25",
-  "note": "USD per 1M tokens. Refreshed 2026-10-25 from vendor pricing pages (official first, OpenCode Console gateway when official page unreachable; per-entry sourceUrl/checkedAt kept for tracing). Unpriced entries have no verified official price.",
+  "generatedAt": "2026-11-13",
+  "note": "USD per 1M tokens. official first, cross-checked second; fast-tier prices under serviceTiers.fast.",
   "providers": {
     "openai": {
       "models": {
@@ -11,7 +11,33 @@
           "billingMode": "flat",
           "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
           "checkedAt": "2026-10-25",
-          "notes": "2026-10 降价(原 $5/$30);≤272K 档;超过 272K 按 $8/$30 计;缓存写入 $5"
+          "notes": "2026-10 降价(原 $5/$30);≤272K 档;超过 272K 按 $8/$30 计;缓存写入 $5",
+          "cacheWriteInput": 5,
+          "longContext": {
+            "inputTokensAbove": 272000,
+            "input": 8,
+            "cachedInput": 0.8,
+            "cacheWriteInput": 10,
+            "output": 30
+          },
+          "serviceTiers": {
+            "fast": {
+              "input": 8,
+              "cachedInput": 0.8,
+              "cacheWriteInput": 10,
+              "output": 40,
+              "longContext": {
+                "inputTokensAbove": 272000,
+                "input": 16,
+                "cachedInput": 1.6,
+                "cacheWriteInput": 20,
+                "output": 60
+              },
+              "confidence": "official"
+            }
+          },
+          "sourceUrlFast": "https://openai.com/api-fast-mode/",
+          "checkedAtFast": "2026-11-13"
         },
         "gpt-5.6-terra": {
           "input": 2,
@@ -20,7 +46,8 @@
           "billingMode": "flat",
           "sourceUrl": "https://opencode.ai/docs/zen",
           "checkedAt": "2026-08-17",
-          "notes": "≤272K 档;超过 272K 按 $4/$18 计;缓存写入 $2.50"
+          "notes": "≤272K 档;超过 272K 按 $4/$18 计;缓存写入 $2.5",
+          "cacheWriteInput": 2.5
         },
         "gpt-5.6-luna": {
           "input": 0.2,
@@ -29,7 +56,8 @@
           "billingMode": "flat",
           "sourceUrl": "https://opencode.ai/docs/zen",
           "checkedAt": "2026-08-17",
-          "notes": "≤272K 档;超过 272K 按 $0.40/$1.80 计;缓存写入 $0.25"
+          "notes": "≤272K 档;超过 272K 按 $0.40/$1.80 计;缓存写入 $0.25",
+          "cacheWriteInput": 0.25
         },
         "gpt-5.5": {
           "input": 5,
@@ -198,7 +226,33 @@
           "billingMode": "flat",
           "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
           "checkedAt": "2026-10-25",
-          "notes": "≤272K 档;超过 272K 按 $20/$75 计;缓存写入 $12.50(>272K $25);OpenRouter 端点交叉核对一致"
+          "notes": "≤272K 档;超过 272K 按 $20/$75 计;缓存写入 $12.5(>272K $25);OpenRouter 端点交叉核对一致",
+          "cacheWriteInput": 12.5,
+          "longContext": {
+            "inputTokensAbove": 272000,
+            "input": 20,
+            "cachedInput": 2,
+            "cacheWriteInput": 25,
+            "output": 75
+          },
+          "serviceTiers": {
+            "fast": {
+              "input": 20,
+              "cachedInput": 2,
+              "cacheWriteInput": 25,
+              "output": 100,
+              "longContext": {
+                "inputTokensAbove": 272000,
+                "input": 40,
+                "cachedInput": 4,
+                "cacheWriteInput": 50,
+                "output": 150
+              },
+              "confidence": "official"
+            }
+          },
+          "sourceUrlFast": "https://openai.com/api-fast-mode/",
+          "checkedAtFast": "2026-11-13"
         },
         "gpt-6-sol": {
           "input": 2,
@@ -207,7 +261,33 @@
           "billingMode": "flat",
           "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
           "checkedAt": "2026-10-25",
-          "notes": "≤272K 档;超过 272K 按 $4/$15 计;缓存写入 $2.50"
+          "notes": "≤272K 档;超过 272K 按 $4/$15 计;缓存写入 $2.5",
+          "cacheWriteInput": 2.5,
+          "longContext": {
+            "inputTokensAbove": 272000,
+            "input": 4,
+            "cachedInput": 0.4,
+            "cacheWriteInput": 5,
+            "output": 15
+          },
+          "serviceTiers": {
+            "fast": {
+              "input": 4,
+              "cachedInput": 0.4,
+              "cacheWriteInput": 5,
+              "output": 20,
+              "longContext": {
+                "inputTokensAbove": 272000,
+                "input": 8,
+                "cachedInput": 0.8,
+                "cacheWriteInput": 10,
+                "output": 30
+              },
+              "confidence": "official"
+            }
+          },
+          "sourceUrlFast": "https://openai.com/api-fast-mode/",
+          "checkedAtFast": "2026-11-13"
         },
         "gpt-6.1-sol": {
           "input": 2,
@@ -216,7 +296,33 @@
           "billingMode": "flat",
           "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
           "checkedAt": "2026-10-25",
-          "notes": "≤272K 档;超过 272K 按 $4/$15 计;缓存写入 $2.50"
+          "notes": "≤272K 档;超过 272K 按 $4/$15 计;缓存写入 $2.5",
+          "cacheWriteInput": 2.5,
+          "longContext": {
+            "inputTokensAbove": 272000,
+            "input": 4,
+            "cachedInput": 0.2,
+            "cacheWriteInput": 5,
+            "output": 15
+          },
+          "serviceTiers": {
+            "fast": {
+              "input": 4,
+              "cachedInput": 0.2,
+              "cacheWriteInput": 5,
+              "output": 20,
+              "longContext": {
+                "inputTokensAbove": 272000,
+                "input": 8,
+                "cachedInput": 0.4,
+                "cacheWriteInput": 10,
+                "output": 30
+              },
+              "confidence": "official"
+            }
+          },
+          "sourceUrlFast": "https://openai.com/api-fast-mode/",
+          "checkedAtFast": "2026-11-13"
         },
         "gpt-6-luna": {
           "input": 0.1,
@@ -225,7 +331,149 @@
           "billingMode": "flat",
           "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
           "checkedAt": "2026-10-25",
-          "notes": "≤272K 档;超过 272K 按 $0.20/$0.75 计;缓存写入 $0.125"
+          "notes": "≤272K 档;超过 272K 按 $0.20/$0.75 计;缓存写入 $0.125",
+          "cacheWriteInput": 0.125,
+          "longContext": {
+            "inputTokensAbove": 272000,
+            "input": 0.2,
+            "cachedInput": 0.02,
+            "cacheWriteInput": 0.25,
+            "output": 0.75
+          },
+          "serviceTiers": {
+            "fast": {
+              "input": 0.2,
+              "cachedInput": 0.02,
+              "cacheWriteInput": 0.25,
+              "output": 1,
+              "longContext": {
+                "inputTokensAbove": 272000,
+                "input": 0.4,
+                "cachedInput": 0.04,
+                "cacheWriteInput": 0.5,
+                "output": 1.5
+              },
+              "confidence": "cross-checked"
+            }
+          },
+          "sourceUrlFast": "https://models.litellm.ai/models/gpt-6-luna",
+          "checkedAtFast": "2026-11-13"
+        },
+        "gpt-6.1-terra": {
+          "input": 1,
+          "cachedInput": 0.05,
+          "cacheWriteInput": 1.25,
+          "output": 5,
+          "billingMode": "flat",
+          "sourceUrl": "https://developers.openai.com/api/docs/pricing",
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 新增;≤272K 档;超过 272K 按 $2/$7.5 计;缓存写入 $1.25;官方 Fast 档 $2/$0.10/$10（长上下文 $4/$0.20/$15）",
+          "longContext": {
+            "inputTokensAbove": 272000,
+            "input": 2,
+            "cachedInput": 0.1,
+            "cacheWriteInput": 2.5,
+            "output": 7.5
+          },
+          "serviceTiers": {
+            "fast": {
+              "input": 2,
+              "cachedInput": 0.1,
+              "cacheWriteInput": 2.5,
+              "output": 10,
+              "longContext": {
+                "inputTokensAbove": 272000,
+                "input": 4,
+                "cachedInput": 0.2,
+                "cacheWriteInput": 5,
+                "output": 15
+              },
+              "confidence": "official"
+            }
+          },
+          "sourceUrlFast": "https://openai.com/api-fast-mode/",
+          "checkedAtFast": "2026-11-13"
+        },
+        "gpt-6-rosalind": {
+          "input": 15,
+          "cachedInput": 1.5,
+          "cacheWriteInput": 18.75,
+          "output": 75,
+          "billingMode": "flat",
+          "sourceUrl": "https://developers.openai.com/api/docs/pricing",
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 新增;Research 受限模型;价格来自交叉核对,官方 Fast 档未见单独报价",
+          "longContext": {
+            "inputTokensAbove": 272000,
+            "input": 30,
+            "cachedInput": 3,
+            "cacheWriteInput": 37.5,
+            "output": 112.5
+          }
+        },
+        "gpt-6-cyber": {
+          "input": 20,
+          "cachedInput": 2,
+          "cacheWriteInput": 25,
+          "output": 100,
+          "billingMode": "flat",
+          "sourceUrl": "https://developers.openai.com/api/docs/pricing",
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 新增;Daybreak Red 受限模型;不支持 Fast 档",
+          "longContext": {
+            "inputTokensAbove": 272000,
+            "input": 40,
+            "cachedInput": 4,
+            "cacheWriteInput": 50,
+            "output": 150
+          }
+        },
+        "gpt-5.6-cyber": {
+          "input": 12.5,
+          "cachedInput": 1.25,
+          "cacheWriteInput": 15.625,
+          "output": 75,
+          "billingMode": "flat",
+          "sourceUrl": "https://developers.openai.com/api/docs/pricing",
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 新增;受限模型;无独立 Fast 报价",
+          "longContext": {
+            "inputTokensAbove": 272000,
+            "input": 25,
+            "cachedInput": 2.5,
+            "cacheWriteInput": 31.25,
+            "output": 112.5
+          }
+        },
+        "gpt-5.5-cyber": {
+          "input": 12.5,
+          "cachedInput": 1.25,
+          "cacheWriteInput": 15.625,
+          "output": 75,
+          "billingMode": "flat",
+          "sourceUrl": "https://developers.openai.com/api/docs/pricing",
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 新增;受限模型;无独立 Fast 报价"
+        },
+        "gpt-5.5-cyber-preview": {
+          "input": 12.5,
+          "cachedInput": 1.25,
+          "cacheWriteInput": 15.625,
+          "output": 75,
+          "billingMode": "flat",
+          "sourceUrl": "https://developers.openai.com/api/docs/pricing",
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 新增;预览版,2027-02-01 下线"
+        },
+        "gpt-6-astra-law": {
+          "input": 10,
+          "cachedInput": 1,
+          "cacheWriteInput": 12.5,
+          "output": 50,
+          "billingMode": "flat",
+          "sourceUrl": "https://developers.openai.com/api/docs/pricing",
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 新增;促销价至少延续到 2026-12-31;官方 API 仍为受限开放"
         }
       }
     },
@@ -336,8 +584,9 @@
           "output": 20,
           "billingMode": "flat",
           "sourceUrl": "https://www.anthropic.com/claude/opus",
-          "checkedAt": "2026-10-25",
-          "notes": "官方 2026-10:比 Opus 5 便宜 20%;fast mode $8/$40;缓存写入 $5.00"
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 校正;缓存读 = 输入 0.05x($0.20);5 分钟缓存写 $5、1 小时 $8;Fast 档 $8/$40",
+          "cacheWriteInput": 5
         },
         "claude-sonnet-5-5": {
           "input": 2,
@@ -356,6 +605,26 @@
           "sourceUrl": "https://www.anthropic.com/claude/haiku",
           "checkedAt": "2026-10-25",
           "notes": "≤100K 档;超过 100K 按 $0.50/$2.50 计;缓存写入 $0.125"
+        },
+        "claude-fable-5-2": {
+          "input": 8,
+          "cachedInput": 0.2,
+          "cacheWriteInput": 10,
+          "output": 40,
+          "billingMode": "flat",
+          "sourceUrl": "https://www.anthropic.com/claude/fable",
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 新增(2026-11-09);缓存读为输入的 0.025x;5 分钟缓存写 $10、1 小时 $16;Batch $4/$20;Fast 档 $16/$0.40/$80"
+        },
+        "claude-mythos-5-2": {
+          "input": 8,
+          "cachedInput": 0.2,
+          "cacheWriteInput": 10,
+          "output": 40,
+          "billingMode": "flat",
+          "sourceUrl": "https://www.anthropic.com/claude/mythos",
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 新增(2026-11-09);受限访问(需 Verification Program);缓存读 0.025x;1 小时缓存写 $16"
         }
       }
     },
@@ -452,6 +721,24 @@
           "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
           "checkedAt": "2026-10-25",
           "notes": "网关列 $1.50/$7.50;OpenRouter 端点标 5 折现价 $0.75/$3.75;两源口径不一致,未核实"
+        },
+        "gemini-4-carbon": {
+          "input": 2,
+          "cachedInput": 0.1,
+          "output": 10,
+          "billingMode": "flat",
+          "sourceUrl": "https://ai.google.dev/gemini-api/docs/pricing",
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 新增;仅隐式缓存;2026-11-30 前促销价,$12-01 起为 $4/$0.20/$20;Priority $3.60/$18;Batch/Flex 半价"
+        },
+        "gemini-4-hydrogen": {
+          "input": 1.5,
+          "cachedInput": 0.075,
+          "output": 7.5,
+          "billingMode": "flat",
+          "sourceUrl": "https://ai.google.dev/gemini-api/docs/pricing",
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 新增(2026-11-12);1M 统一上下文;Priority $2.70/$13.50;Batch/Flex 半价"
         }
       }
     },
@@ -566,8 +853,8 @@
           "output": 1.25,
           "billingMode": "flat",
           "sourceUrl": "https://docs.z.ai/guides/overview/pricing",
-          "checkedAt": "2026-10-25",
-          "notes": "新品;FlashX-Legal 同价"
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 新增;glm-5.3-flashx-legal 同价"
         }
       }
     },
@@ -710,6 +997,15 @@
           "sourceUrl": "https://www.alibabacloud.com/help/en/model-studio/model-pricing",
           "checkedAt": "2026-10-25",
           "notes": "2026-10 新增;缓存命中按输入价 10%;网关注明 cachedWrite $0.20"
+        },
+        "qwen4-max-preview": {
+          "input": 0,
+          "cachedInput": 0,
+          "output": 0,
+          "billingMode": "unpriced",
+          "sourceUrl": "https://docs.qwencloud.com/developer-guides/getting-started/latest-model",
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 新增;仅 Token Plan(Credits)订阅可用,无按 token 公开价;预览期 2026-11-11 至 11-25,之后退役"
         }
       }
     },
@@ -780,6 +1076,15 @@
           "sourceUrl": "https://cloud.tencent.com/document/product/1823/130055",
           "checkedAt": "2026-10-25",
           "notes": "官方 TokenHub:¥6.00/¥0.30/¥18.00,按 7.2 折算;新一代生产力模型"
+        },
+        "hy4": {
+          "input": 0.417,
+          "cachedInput": 0.021,
+          "output": 1.2505,
+          "billingMode": "flat",
+          "sourceUrl": "https://www.tencentcloud.com/document/product/1300/78937",
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 新增(2026-11-04 GA);当前 5 折促销价,目录价 $0.834/$0.042/$2.501,2026-12-31 后恢复;hy4-preview 同价"
         }
       }
     },
@@ -918,13 +1223,13 @@
           "notes": "GA;官方 API 名已改为 mistral-small-2603;官方未列缓存价,缓存值未核实"
         },
         "mistral-large-4": {
-          "input": 1.36,
-          "cachedInput": 0.14,
-          "output": 4.18,
+          "input": 0.7,
+          "cachedInput": 0.07,
+          "output": 2.1,
           "billingMode": "flat",
-          "sourceUrl": "https://docs.mistral.ai/inference/pricing",
-          "checkedAt": "2026-10-25",
-          "notes": "Public Preview(2026-10-06);官方三处材料均无 50% 促销字样,网关标 \"(50% off)\" 且未给截止日"
+          "sourceUrl": "https://docs.mistral.ai/models/mistral-large-4-0",
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 校正(2026-11-05 起官方价);旧值 1.36/4.18 来自第三方 host,非官方牌价"
         },
         "mistral-small-2603": {
           "input": 0.15,
@@ -1264,6 +1569,19 @@
           "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
           "checkedAt": "2026-10-25",
           "notes": "Meta;另有 Contributor 训练授权折扣档 $0.10/$0.002/$0.20"
+        }
+      }
+    },
+    "x-ai": {
+      "models": {
+        "grok-4.7": {
+          "input": 2,
+          "cachedInput": 0.5,
+          "output": 6,
+          "billingMode": "flat",
+          "sourceUrl": "https://docs.x.ai/developers/pricing",
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 校正;≥200K 输入整请求 $4/$1/$12;Fast 档仅在 Cursor/Grok Build 内计费,公网 API 无"
         }
       }
     }

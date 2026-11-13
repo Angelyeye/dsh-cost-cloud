@@ -183,11 +183,33 @@ test('多厂商目录：参与云端算价，且与插件侧同源', async () =>
     const model = 'gpt-5.6-sol'
     const entry = catalogEntryFor('openai', model, { mode: 'fuzzy', fx: info.fxRate })
     assert.ok(entry, '目录里应有该模型')
-    const tokens = { input: 1000000, output: 0, cacheRead: 0, cacheWrite: 0 }
+    // v1.11.0：用短档用量比较（1M 输入会超过 272K 阈值，进入长上下文档）
+    const tokens = { input: 1000, output: 500, cacheRead: 2000, cacheWrite: 0, reasoning: 0 }
     const withCat = computeCostAt('openai', model, Date.UTC(2026, 8, 20), tokens, catalogOpts(app.db))
     assert.equal(withCat.estimated, false, '目录命中应为精确价')
     assert.equal(withCat.source, 'catalog')
-    assert.ok(Math.abs(withCat.cost - entry.rates.input) < 1e-9, `${withCat.cost} vs ${entry.rates.input}`)
+    assert.ok(Math.abs(withCat.cost - computeCost(entry.rates, false, false, tokens)) < 1e-9, `${withCat.cost}`)
+
+    // v1.11.0：长上下文分档 —— 输入超过 272K 时按整请求长档价，与插件侧同口径
+    {
+      const longTokens = { input: 300000, output: 0, cacheRead: 0, cacheWrite: 0 }
+      const shortTokens = { input: 1000, output: 0, cacheRead: 0, cacheWrite: 0 }
+      const longCost = computeCostAt('openai', model, Date.UTC(2026, 8, 20), longTokens, catalogOpts(app.db))
+      const shortCost = computeCostAt('openai', model, Date.UTC(2026, 8, 20), shortTokens, catalogOpts(app.db))
+      assert.ok(Math.abs(longCost.cost / longTokens.input - 2 * shortCost.cost / shortTokens.input) < 1e-9,
+        '长档输入价应为短档的 2 倍（' + longCost.cost + ' / ' + shortCost.cost + '）')
+    }
+
+    // v1.11.0：Fast 档 —— 显式传 serviceTier 时按 Fast 价（约 2 倍），且标记档位
+    {
+      const t = { input: 1000, output: 0, cacheRead: 0, cacheWrite: 0 }
+      const stdCost = computeCostAt('openai', 'gpt-6.1-sol', Date.UTC(2026, 8, 20), t, catalogOpts(app.db))
+      const fastCost = computeCostAt('openai', 'gpt-6.1-sol', Date.UTC(2026, 8, 20), t,
+        Object.assign({}, catalogOpts(app.db), { serviceTier: 'fast' }))
+      assert.equal(stdCost.serviceTier, 'standard')
+      assert.equal(fastCost.serviceTier, 'fast')
+      assert.ok(Math.abs(fastCost.cost / stdCost.cost - 2) < 1e-9, `${fastCost.cost} vs ${stdCost.cost}`)
+    }
 
     // 关掉目录：回落兜底价（estimated=true），金额与精确价不同
     setCatalogConfig(app.db, { enabled: false })
@@ -201,7 +223,7 @@ test('多厂商目录：参与云端算价，且与插件侧同源', async () =>
     assert.equal(on.fx, 5)
     const fx5 = computeCostAt('openai', model, Date.UTC(2026, 8, 21, 2), tokens, catalogOpts(app.db))
     const fx72 = catalogEntryFor('openai', model, { mode: 'fuzzy', fx: 7.2 })
-    assert.ok(Math.abs(fx5.cost - fx72.rates.input * (5 / 7.2)) < 1e-6, `${fx5.cost}`)
+    assert.ok(Math.abs(fx5.cost - computeCost(fx72.rates, false, false, tokens) * (5 / 7.2)) < 1e-6, `${fx5.cost}`)
 
     // 非法汇率被拒（保持上一次合法值）
     const bad = setCatalogConfig(app.db, { catalogFxRate: -1 })

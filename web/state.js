@@ -131,12 +131,19 @@ export function fmtInt(x) {
   const n = Math.round(Number(x) || 0)
   return n.toLocaleString('zh-CN')
 }
+// v1.11.0：token 数量统一中文单位（与插件 token-format.js 同一规则）
+//   <1万 千分位整数；≥1万 X.X万（≥100万取整）；≥1亿 X.XX亿（≥10亿 1 位）
 export function fmtTokens(x) {
-  const n = Number(x) || 0
-  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B'
-  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M'
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K'
-  return String(n)
+  const raw = Number(x)
+  const n = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0
+  const trim = (s) => (s.indexOf('.') >= 0 ? s.replace(/\.?0+$/, '') : s)
+  if (n < 10000) return n.toLocaleString('zh-CN')
+  if (n < 100000000) {
+    const w = n / 10000
+    return (w >= 100 ? String(Math.round(w)) : trim(w.toFixed(1))) + '万'
+  }
+  const y = n / 100000000
+  return (y >= 10 ? trim(y.toFixed(1)) : trim(y.toFixed(2))) + '亿'
 }
 /** 0.1234 → "12.3%" */
 export function fmtPct(x, digits) {
@@ -202,7 +209,7 @@ export const HEAT_METRICS = [
   { id: 'realCost', label: '按量', kind: 'money' },
   { id: 'subCost', label: '订阅', kind: 'money' },
   { id: 'calls', label: '调用', kind: 'int' },
-  { id: 'tokens', label: 'Tokens', kind: 'tokens' },
+  { id: 'tokens', label: 'Token', kind: 'tokens' },
 ]
 
 /**

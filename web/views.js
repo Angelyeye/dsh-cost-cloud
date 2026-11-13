@@ -207,7 +207,7 @@ export function heatCalendar(daily, opts) {
   }, days.map((d) => {
     const v = Number(d[metric]) || 0
     const lvl = heatLevel(v, breaks)
-    const tip = `${d.date}（${DOW_LONG[Number(d.dow) || 0]}） · ${fmt(v)} · ${fmtInt(d.calls)} 次 · ${fmtTokens(d.tokens)} tokens`
+    const tip = `${d.date}（${DOW_LONG[Number(d.dow) || 0]}） · ${fmt(v)} · ${fmtInt(d.calls)} 次 · ${fmtTokens(d.tokens)}`
     const c = el('div', {
       class: 'heat-cell l' + lvl + (Number(d.dow) === 0 || Number(d.dow) === 6 ? ' wknd' : '') + (v > 0 ? '' : ' zero'),
       style: { width: cell + 'px', height: cell + 'px' },
