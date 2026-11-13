@@ -902,8 +902,8 @@
           "output": 6,
           "billingMode": "flat",
           "sourceUrl": "https://docs.x.ai/developers/pricing",
-          "checkedAt": "2026-10-25",
-          "notes": "≤200K 档;超过 200K 按 $4/$1/$12 计;Batch -20%;Priority ×2"
+          "checkedAt": "2026-11-13",
+          "notes": "v1.11.0 校正;≥200K 输入整请求 $4/$1/$12;Fast 档仅在 Cursor/Grok Build 内计费,公网 API 无"
         },
         "grok-4.20-0309-reasoning": {
           "input": 1.25,
@@ -1569,19 +1569,6 @@
           "sourceUrl": "https://opencode.ai/v2/docs/console/models/",
           "checkedAt": "2026-10-25",
           "notes": "Meta;另有 Contributor 训练授权折扣档 $0.10/$0.002/$0.20"
-        }
-      }
-    },
-    "x-ai": {
-      "models": {
-        "grok-4.7": {
-          "input": 2,
-          "cachedInput": 0.5,
-          "output": 6,
-          "billingMode": "flat",
-          "sourceUrl": "https://docs.x.ai/developers/pricing",
-          "checkedAt": "2026-11-13",
-          "notes": "v1.11.0 校正;≥200K 输入整请求 $4/$1/$12;Fast 档仅在 Cursor/Grok Build 内计费,公网 API 无"
         }
       }
     }

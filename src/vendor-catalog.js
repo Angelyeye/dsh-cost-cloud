@@ -53,7 +53,7 @@ export const PROVIDER_ALIASES = {
   google: 'google', gemini: 'google', deepmind: 'google',
   moonshot: 'moonshot', 'moonshot-ai': 'moonshot', 'moonshotai': 'moonshot', kimi: 'moonshot',
   'z-ai': 'z-ai', zai: 'z-ai', zhipu: 'z-ai', bigmodel: 'z-ai', glm: 'z-ai',
-  xai: 'xai', grok: 'xai',
+  xai: 'xai', grok: 'xai', 'x-ai': 'xai', 'x-ai-inc': 'xai', xaiinc: 'xai',
   alibaba: 'alibaba', qwen: 'alibaba', dashscope: 'alibaba', ali: 'alibaba',
   minimax: 'minimax',
   tencent: 'tencent', hunyuan: 'tencent',
