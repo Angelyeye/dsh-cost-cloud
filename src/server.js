@@ -243,7 +243,11 @@ export function createServer(config, opts) {
       if (!Array.isArray(parts) || !parts.length || parts.length > 8) {
         throw new HttpError(400, 'INVALID_BODY', 'union 需为 1..8 项的数组')
       }
-      return Q.overviewUnion(db, parts.map((p) => adminParams(Object.assign({ range: query.range, days: query.days }, p || {}))))
+      // 注意：必须把 from/to 一起透传。adminParams() 内部走 resolveRange()，
+      // 而 resolveRange 只有在拿到 q.from 时才会返回自定义区间；这里的白名单式
+      // Object.assign 若漏掉 from/to，union 分支就永远只能按 range 枚举解析 ——
+      // 表现是「本机+云端」视图无论选哪个区间都固定近 7 天，而「仅云端」正常。
+      return Q.overviewUnion(db, parts.map((p) => adminParams(Object.assign({ range: query.range, days: query.days, from: query.from, to: query.to }, p || {}))))
     }
     return Q.overview(db, adminParams(query))
   }
@@ -262,7 +266,8 @@ export function createServer(config, opts) {
       if (!Array.isArray(parts) || !parts.length || parts.length > 8) {
         throw new HttpError(400, 'INVALID_BODY', 'union 需为 1..8 项的数组')
       }
-      return Q.pluginViewUnion(db, parts.map((p) => adminParams(Object.assign({ range: query.range, days: query.days }, p || {}))))
+      // 同上：from/to 必须透传，否则 union 分支无法解析自定义区间。
+      return Q.pluginViewUnion(db, parts.map((p) => adminParams(Object.assign({ range: query.range, days: query.days, from: query.from, to: query.to }, p || {}))))
     }
     return Q.pluginView(db, adminParams(query))
   }
