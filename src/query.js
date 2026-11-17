@@ -563,14 +563,26 @@ function n0(x) { return Number(x) || 0 }
 /** 插件侧云端口径（字段名与本地 buildDashboard 完全一致，便于相加） */
 export function pluginView(db, params) {
   const w = buildWhere(params)
-  const days = Number.isFinite(Number(params.days)) && Number(params.days) > 0 ? Math.floor(Number(params.days)) : 7
   const now = Date.now()
-  const cutoff = days > 0 ? now - days * DAY_MS : 0
-  // range=all（或 days<=0）时按**数据实际起点**铺日期轴，让「全部」在云端视图里也是全部
-  const allTime = days <= 0 || params.range === 'all'
+  // 日期轴起点必须与**实际过滤区间**一致，不能只看 params.days：
+  // 插件走 from/to 自定义区间（「今天 / 近 14 天 / 近 30 天」都这么传），
+  // 此时 params.days 为空 —— 若仍按 days 默认 7 天铺轴，就会出现
+  // 「总额是全区间、byDay 只有最后 7 天」的自相矛盾（2026-11-17 实测：
+  // 本机设备总额 ¥1174，byDay 却只有 6 天、最早 11/10）。
+  const hasExplicitFrom = Number.isFinite(Number(params.fromMs)) && Number(params.fromMs) > 0
+  const daysRaw = Number(params.days)
+  const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.floor(daysRaw) : 0
+  const allTime = params.range === 'all' || days <= 0
+  // 起点优先级：range=all → 数据实际起点；有 fromMs → fromMs；否则按 days 回推。
+  let cutoff = 0
+  if (params.range === 'all') cutoff = 0
+  else if (hasExplicitFrom) cutoff = Number(params.fromMs)
+  else if (days > 0) cutoff = now - days * DAY_MS
+  else cutoff = 0
   const firstRow = db.prepare(`SELECT MIN(${TS_EXPR}) AS t FROM records WHERE ${w.sql}`).get(...w.params)
   const firstTs = Number(firstRow && firstRow.t) || 0
-  const startKey = dayKey(allTime && firstTs ? firstTs : cutoff)
+  // allTime 且拿得到首条记录时，按数据起点铺轴；否则按 cutoff（可能为 0 = 从头铺）
+  const startKey = dayKey(allTime && firstTs ? firstTs : (cutoff || (firstTs || now)))
   const endKey = dayKey(now)
   const dates = enumerateDays(startKey, endKey)
 
