@@ -13,6 +13,7 @@
 - **目录元信息**：`CATALOG_META.generatedAt` 与目录文件 `generatedAt` 同步改为 `2026-11-18`，`catalogInfo` 回显的目录指纹随数据重算（与插件侧同值）。
 - **pricing.js 副本补齐漂移**：插件 v1.11.2 起 `pricing.js` 多了展示层 `displayModelKey()`，云端副本此前停在 v1.11.0，`scripts/check-pricing-sync.js` 报 `PRICING_SOURCE_HASH` 不一致（库内 `22d1497785aa7287` vs 插件 `435c5329f9410f7f`）。本次按 `scripts/sync-pricing-copy.js` 重新同步，`PRICING_SOURCE_HASH` 更新为 `sha256:435c5329f9410f7f`；`PRICE_ERAS` / 兜底价 / 订阅价逐字段一致，11 条计费抽样核对通过。
 - **协议兼容**：`syncVer` 仍为 1；目录与计价口径只是多了三条精确价、少走 provider 兜底，对历史记录与旧客户端无影响。
+- **服务版本号不再手写**：`config.js` 的 `SERVICE_VERSION` 改从 `package.json` 读取。此前是手写常量且发版时漏改，1.5.0 / 1.6.0 / 1.6.1 发布后 `/api/v1/health` 仍回 `serviceVersion: "1.4.2"`，看板「服务版本」与插件 `cost_sync` 自检都显示旧版本；现在恒等于包版本（本次为 `1.6.1`）。
 - **测试**：云端全部测试与 `node scripts/check-pricing-sync.js` 均通过。
 
 ## 1.6.0

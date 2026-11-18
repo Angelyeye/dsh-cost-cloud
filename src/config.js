@@ -9,7 +9,21 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
 
-const SERVICE_VERSION = '1.4.2'
+/**
+ * 服务版本号直接从 package.json 读取。
+ *
+ * 此前是手写常量，发版时容易忘记同步 —— 1.5.0 / 1.6.0 / 1.6.1 三版发布后
+ * `/api/v1/health` 仍回 `serviceVersion: "1.4.2"`，看板与插件 `cost_sync` 的
+ * 自检里都显示成旧版本。这里改为读取包版本，杜绝再次漂移。
+ */
+const SERVICE_VERSION = (() => {
+  try {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+    return String(pkg.version || '0.0.0')
+  } catch {
+    return '0.0.0'
+  }
+})()
 const SYNC_VER = 1
 
 function bool(v, fallback) {
