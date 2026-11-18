@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-13",
+  "generatedAt": "2026-11-18",
   "note": "USD per 1M tokens. official first, cross-checked second; fast-tier prices under serviceTiers.fast.",
   "providers": {
     "openai": {
@@ -474,6 +474,93 @@
           "sourceUrl": "https://developers.openai.com/api/docs/pricing",
           "checkedAt": "2026-11-13",
           "notes": "v1.11.0 新增;促销价至少延续到 2026-12-31;官方 API 仍为受限开放"
+        },
+        "gpt-6.2-astra": {
+          "input": 8,
+          "cachedInput": 0.4,
+          "cacheWriteInput": 10,
+          "output": 40,
+          "billingMode": "flat",
+          "sourceUrl": "https://aiplans.dev/zh/models/gpt-6.2-astra",
+          "checkedAt": "2026-11-18",
+          "notes": "v1.12.0 新增;2026-11-17 发布;≤272K 档;超过 272K 输入与缓存翻倍、输出 ×1.5;缓存写入 $10(12h $20);Fast = 标准 ×2;Ultrafast 3×(2027-03-01 起 6×),插件按 Fast 计",
+          "longContext": {
+            "inputTokensAbove": 272000,
+            "input": 16,
+            "cachedInput": 0.8,
+            "cacheWriteInput": 20,
+            "output": 60
+          },
+          "serviceTiers": {
+            "fast": {
+              "input": 16,
+              "cachedInput": 0.8,
+              "cacheWriteInput": 20,
+              "output": 80,
+              "longContext": {
+                "inputTokensAbove": 272000,
+                "input": 32,
+                "cachedInput": 1.6,
+                "cacheWriteInput": 40,
+                "output": 120
+              },
+              "confidence": "official"
+            }
+          },
+          "sourceUrlFast": "https://openai.com/api-fast-mode/",
+          "checkedAtFast": "2026-11-18"
+        },
+        "gpt-6.2-sol": {
+          "input": 2,
+          "cachedInput": 0.1,
+          "cacheWriteInput": 2.5,
+          "output": 10,
+          "billingMode": "flat",
+          "sourceUrl": "https://aiplans.dev/zh/models/gpt-6.2-sol",
+          "checkedAt": "2026-11-18",
+          "notes": "v1.12.0 新增;2026-11-17 发布;沿用 6.1 Sol 价格;≤272K 档;超过 272K 输入与缓存翻倍、输出 ×1.5;缓存写入 $2.5(12h $5);Fast = 标准 ×2;Ultrafast 3×(2027-03-01 起 6×),插件按 Fast 计",
+          "longContext": {
+            "inputTokensAbove": 272000,
+            "input": 4,
+            "cachedInput": 0.2,
+            "cacheWriteInput": 5,
+            "output": 15
+          },
+          "serviceTiers": {
+            "fast": {
+              "input": 4,
+              "cachedInput": 0.2,
+              "cacheWriteInput": 5,
+              "output": 20,
+              "longContext": {
+                "inputTokensAbove": 272000,
+                "input": 8,
+                "cachedInput": 0.4,
+                "cacheWriteInput": 10,
+                "output": 30
+              },
+              "confidence": "official"
+            }
+          },
+          "sourceUrlFast": "https://openai.com/api-fast-mode/",
+          "checkedAtFast": "2026-11-18"
+        },
+        "gpt-6.2-astra-law": {
+          "input": 8,
+          "cachedInput": 0.4,
+          "cacheWriteInput": 10,
+          "output": 40,
+          "billingMode": "flat",
+          "sourceUrl": "https://aiplans.dev/zh/models/gpt-6.2-astra-law",
+          "checkedAt": "2026-11-18",
+          "notes": "v1.12.0 新增;2026-11-17 发布;受限合规变体,与 gpt-6.2-astra 同价;官方 Fast/Ultrafast 名单未列本模型,不登记 Fast 块;≤272K 档;超过 272K 输入与缓存翻倍、输出 ×1.5",
+          "longContext": {
+            "inputTokensAbove": 272000,
+            "input": 16,
+            "cachedInput": 0.8,
+            "cacheWriteInput": 20,
+            "output": 60
+          }
         }
       }
     },

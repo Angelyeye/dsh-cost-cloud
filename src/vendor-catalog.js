@@ -7,8 +7,8 @@
 // 以便溯源；条目单价为 **USD / 1M tokens**。
 //
 // 本插件账本恒以人民币（CNY）入账，因此目录价在计费时按 `catalogFxRate`
-// （默认 7.2，可在配置面板修改）折算为 CNY。缓存写入价沿用目录约定：
-// 与缓存命中价（cachedInput）同价。
+// （默认 6.67，可在配置面板修改）折算为 CNY。缓存写入价优先取条目自带的
+// `cacheWriteInput`，未登记时与缓存命中价（cachedInput）同价。
 //
 // 匹配规则（catalogEntryFor）：
 //   1. provider 别名归一（openai/gpt、anthropic/claude、google/gemini、
@@ -26,9 +26,9 @@ import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 
 export const CATALOG_META = {
-  generatedAt: '2026-11-13',
+  generatedAt: '2026-11-18',
   note: 'USD per 1M tokens; unpriced entries have no verified official price. fast-tier prices live under serviceTiers.fast.',
-  origin: 'adapted from dsh-cost-meter docs/provider-pricing.json (MIT); refreshed from vendor pricing pages 2026-11-13',
+  origin: 'adapted from dsh-cost-meter docs/provider-pricing.json (MIT); refreshed from vendor pricing pages 2026-11-18',
 }
 
 /** 目录价 USD→CNY 默认汇率（可在配置中覆盖）。v1.11.0 起由 7.2 调整为 6.67。 */

@@ -3,6 +3,18 @@
 本服务是「多设备用量汇总 + 云端权威算价」的采集端服务。版本号与插件
 `@angelyeye/dsh-cost-tracker` 独立演进；两者通过 `syncVer` 契约与同源价格表协作。
 
+## 1.6.1
+
+**跟随插件 v1.12.0：价格目录新增 GPT-6.2 系列（Astra / Sol / Astra Law）**
+
+配套：`@angelyeye/dsh-cost-tracker` **v1.12.0**。
+
+- **目录同源刷新**：`src/docs/provider-pricing.json`、`src/vendor-catalog.js` 与插件**逐字节一致**，目录从 15 家 / 154 条扩到 **15 家 / 157 条**（openai 34 → 37）。新增 `gpt-6.2-astra`（8 / 0.40 / 10 / 40 USD，Fast 16 / 0.80 / 20 / 80）、`gpt-6.2-sol`（2 / 0.10 / 2.5 / 10，Fast 4 / 0.20 / 5 / 20）、`gpt-6.2-astra-law`（8 / 0.40 / 10 / 40，官方未列 Fast，故不登记 Fast 块）。三条均登记 >272K 长上下文档（输入与缓存翻倍、输出 ×1.5）。
+- **目录元信息**：`CATALOG_META.generatedAt` 与目录文件 `generatedAt` 同步改为 `2026-11-18`，`catalogInfo` 回显的目录指纹随数据重算（与插件侧同值）。
+- **pricing.js 副本补齐漂移**：插件 v1.11.2 起 `pricing.js` 多了展示层 `displayModelKey()`，云端副本此前停在 v1.11.0，`scripts/check-pricing-sync.js` 报 `PRICING_SOURCE_HASH` 不一致（库内 `22d1497785aa7287` vs 插件 `435c5329f9410f7f`）。本次按 `scripts/sync-pricing-copy.js` 重新同步，`PRICING_SOURCE_HASH` 更新为 `sha256:435c5329f9410f7f`；`PRICE_ERAS` / 兜底价 / 订阅价逐字段一致，11 条计费抽样核对通过。
+- **协议兼容**：`syncVer` 仍为 1；目录与计价口径只是多了三条精确价、少走 provider 兜底，对历史记录与旧客户端无影响。
+- **测试**：云端全部测试与 `node scripts/check-pricing-sync.js` 均通过。
+
 ## 1.6.0
 
 **跟随插件 v1.11.0：目录汇率改 6.67 · 支持 GPT Fast 档重算 · 长上下文分档 · 看板 token 中文单位**

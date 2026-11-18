@@ -101,7 +101,9 @@ test('目录状态回显：包含 fastTierModelCount 与刷新日期', () => {
   try {
     const info = catalogInfo(db)
     assert.ok(info.fastTierModelCount >= 6, String(info.fastTierModelCount))
-    assert.equal(info.meta.generatedAt, '2026-11-13')
+    // 日期随目录刷新前进：只断言「不早于当前已知基线」，避免每次刷价都要改测试
+    assert.match(String(info.meta.generatedAt), /^20\d\d-\d\d-\d\d$/)
+    assert.ok(String(info.meta.generatedAt) >= '2026-11-18', String(info.meta.generatedAt))
     assert.equal(info.fxRate, 6.67)
   } finally {
     cleanup()

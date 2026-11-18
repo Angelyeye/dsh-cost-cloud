@@ -58,7 +58,7 @@ export const V41_EFFECTIVE_AT = Date.UTC(2026, 8, 10, 4, 0, 0)
 
 /** 与插件仓库 pricing.js 的 sha256 同源校验值（scripts/check-pricing-sync.js 比对）。
  *  由 scripts/sync-pricing-copy.js 自动重算；请勿手改。 */
-export const PRICING_SOURCE_HASH = 'sha256:22d1497785aa7287'
+export const PRICING_SOURCE_HASH = 'sha256:435c5329f9410f7f'
 
 /**
  * V4.1 Flash 档的规范（官方现役）模型名。
@@ -117,6 +117,37 @@ export const MODEL_ALIASES = {
   deepseekv41flash: V41_FLASH_MODEL,   // deepseek-v4.1-flash / deepseek-v41-flash / deepseek_v4.1_flash …
   deepseekv41: V41_FLASH_MODEL,        // deepseek-v41
   deepseekflashv41: V41_FLASH_MODEL,   // deepseek-flash-v4.1
+}
+
+/**
+ * 展示层规范名助手（v1.10.2）——把一个模型名折叠成「按模型聚合」的显示键。
+ *
+ * 背景：按量记录入账时 model 已是计费规范名（小写，如 glm-5.3-flash），
+ * 但订阅制记录不查价目表，model 保留渠道原始拼写（GLM-5.3-Flash / glm-5.3-flash …），
+ * 堆叠图按模型名分组时就会把同一个模型拆成一堆图例项。
+ *
+ * 折叠顺序（与计价层 priceFor 的解析顺序一致，先精确后模糊）：
+ *   1. 时代精确/路由表（resolveModelInEra）：命中 → 计费规范名；
+ *   2. 目录条目：catalogModel 有值 → 目录里的官方键；
+ *   3. 兜底：归一化名原样返回（大小写/分隔符重复照样被折叠，怪名保持原拼写）。
+ *
+ * 与计费无关：本函数只影响**显示**，不改任何入账口径。
+ * @param {string} model - 原始模型名
+ * @param {Array<{models:object, routes?:object}>} [eras] - 全部价目表时代（内置+同步），缺省用内置
+ * @param {{catalog?:Function}} [opts] - catalog(np, model) → 目录命中（可注入 vendor-catalog）
+ * @param {string} [np] - 归一化 provider 名（目录查询用）
+ * @returns {string} 展示用规范名
+ */
+export function displayModelKey(model, eras, opts, np) {
+  const raw = String(model == null ? '' : model)
+  if (!raw) return ''
+  for (const era of (Array.isArray(eras) && eras.length ? eras : PRICE_ERAS)) {
+    const hit = resolveModelInEra(era, raw)
+    if (hit) return hit
+  }
+  const c = opts && typeof opts.catalog === 'function' ? opts.catalog(np || '', raw) : null
+  if (c && c.catalogModel) return String(c.catalogModel)
+  return raw
 }
 
 const ERA_INDEX = new Map()
